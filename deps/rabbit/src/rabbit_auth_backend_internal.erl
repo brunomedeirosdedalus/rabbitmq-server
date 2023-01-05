@@ -6,7 +6,13 @@
 %%
 
 -module(rabbit_auth_backend_internal).
+
+-include_lib("kernel/include/logger.hrl").
+
 -include_lib("rabbit_common/include/rabbit.hrl").
+-include_lib("rabbit_common/include/logging.hrl").
+
+-include("internal_user.hrl").
 
 -behaviour(rabbit_authn_backend).
 -behaviour(rabbit_authz_backend).
@@ -30,6 +36,8 @@
 -export([user_info_keys/0, perms_info_keys/0,
          user_perms_info_keys/0, vhost_perms_info_keys/0,
          user_vhost_perms_info_keys/0, all_users/0,
+         user_topic_perms_info_keys/0, vhost_topic_perms_info_keys/0,
+         user_vhost_topic_perms_info_keys/0,
          list_users/0, list_users/2, list_permissions/0,
          list_user_permissions/1, list_user_permissions/3,
          list_topic_permissions/0,
@@ -39,8 +47,12 @@
 
 -export([state_can_expire/0]).
 
-%% for testing
 -export([hashing_module_for_user/1, expand_topic_permission/2]).
+
+-ifdef(TEST).
+-export([extract_user_permission_params/2,
+         extract_topic_permission_params/2]).
+-endif.
 
 -import(rabbit_data_coercion, [to_atom/1, to_list/1, to_binary/1]).
 
@@ -56,8 +68,9 @@
 %% (inserted by a version older than 3.6.0) and fall back to MD5, the
 %% now obsolete hashing function.
 hashing_module_for_user(User) ->
+    
     ModOrUndefined = internal_user:get_hashing_algorithm(User),
-    rabbit_password:hashing_mod(ModOrUndefined).
+        rabbit_password:hashing_mod(ModOrUndefined).
 
 -define(BLANK_PASSWORD_REJECTION_MESSAGE,
         "user '~ts' attempted to log in with a blank password, which is prohibited by the internal authN backend. "
@@ -300,7 +313,7 @@ delete_user(Username, ActingUser) ->
             rabbit_types:error('not_found').
 
 lookup_user(Username) ->
-    rabbit_misc:dirty_read({rabbit_user, Username}).
+    rabbit_db_user:get(Username).
 
 -spec exists(rabbit_types:username()) -> boolean().
 
@@ -462,6 +475,14 @@ set_permissions(Username, VirtualHost, ConfigurePerm, WritePerm, ReadPerm, Actin
                       throw({error, {invalid_regexp, Regexp, Reason}})
               end
       end, [ConfigurePerm, WritePerm, ReadPerm]),
+    UserPermission = #user_permission{
+                        user_vhost = #user_vhost{
+                                        username     = Username,
+                                        virtual_host = VirtualHost},
+                        permission = #permission{
+                                        configure  = ConfigurePerm,
+                                        write      = WritePerm,
+                                        read       = ReadPerm}},
     try
         UserPermission = #user_permission{
                             user_vhost = #user_vhost{
@@ -546,6 +567,18 @@ set_topic_permissions(Username, VirtualHost, Exchange, WritePerm, ReadPerm, Acti
                     throw({error, {invalid_regexp, RegexpBin, Reason}})
             end
         end, [WritePerm, ReadPerm]),
+    TopicPermission = #topic_permission{
+                         topic_permission_key = #topic_permission_key{
+                                                   user_vhost = #user_vhost{
+                                                                   username     = Username,
+                                                                   virtual_host = VirtualHost},
+                                                   exchange = Exchange
+                                                  },
+                         permission = #permission{
+                                         write = WritePermRegex,
+                                         read  = ReadPermRegex
+                                        }
+                        },
     try
         TopicPermission = #topic_permission{
                              topic_permission_key = #topic_permission_key{
@@ -559,7 +592,7 @@ set_topic_permissions(Username, VirtualHost, Exchange, WritePerm, ReadPerm, Acti
                                              read  = ReadPermRegex
                                             }
                             },
-        R = rabbit_db_user:set_topic_permissions(TopicPermission),
+        R = rabbit_db_user:set_topic_permissions(TopicPermission),        
         rabbit_log:info("Successfully set topic permissions on exchange '~ts' for "
                          "'~ts' in virtual host '~ts' to '~ts', '~ts'",
                          [Exchange, Username, VirtualHost, WritePerm, ReadPerm]),

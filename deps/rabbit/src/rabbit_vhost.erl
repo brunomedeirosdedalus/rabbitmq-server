@@ -9,6 +9,7 @@
 
 -include_lib("kernel/include/logger.hrl").
 -include_lib("rabbit_common/include/rabbit.hrl").
+
 -include("vhost.hrl").
 
 -export([recover/0, recover/1, read_config/1]).
@@ -23,6 +24,7 @@
 -export([vhost_down/1]).
 -export([put_vhost/5,
          put_vhost/6]).
+
 
 %%
 %% API
@@ -506,10 +508,7 @@ default_name() ->
 
 -spec lookup(vhost:name()) -> vhost:vhost() | rabbit_types:ok_or_error(any()).
 lookup(VHostName) ->
-    case rabbit_misc:dirty_read({rabbit_vhost, VHostName}) of
-        {error, not_found} -> {error, {no_such_vhost, VHostName}};
-        {ok, Record}       -> Record
-    end.
+    rabbit_db_vhost:get(VHostName).
 
 -spec assert(vhost:name()) -> 'ok'.
 assert(VHostName) ->

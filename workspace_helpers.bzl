@@ -123,6 +123,14 @@ def rabbitmq_external_deps(rabbitmq_workspace = "@rabbitmq-server"):
     )
 
     github_erlang_app(
+        name = "khepri",
+        org = "rabbitmq",
+        ref = "main",
+        version = "main",
+        build_file = rabbitmq_workspace + "//:BUILD.khepri",
+    )
+
+    github_erlang_app(
         name = "meck",
         org = "eproxus",
     )

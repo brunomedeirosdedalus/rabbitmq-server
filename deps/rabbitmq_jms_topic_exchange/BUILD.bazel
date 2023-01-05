@@ -18,6 +18,7 @@ APP_MODULE = "rabbit_federation_app"
 
 DEPS = [
     "//deps/rabbit_common:erlang_app",
+    "@khepri//:erlang_app",
 ]
 
 RUNTIME_DEPS = [

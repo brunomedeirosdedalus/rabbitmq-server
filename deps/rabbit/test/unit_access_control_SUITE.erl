@@ -391,9 +391,6 @@ topic_matching1(_Config) ->
                        lists:nth(11, Bindings), lists:nth(19, Bindings),
                        lists:nth(21, Bindings), lists:nth(28, Bindings)],
     exchange_op_callback(X, remove_bindings, [RemovedBindings]),
-    RemainingBindings = ordsets:to_list(
-                          ordsets:subtract(ordsets:from_list(Bindings),
-                                           ordsets:from_list(RemovedBindings))),
 
     %% test some matches
     test_topic_expect_match(
@@ -416,7 +413,7 @@ topic_matching1(_Config) ->
        {"args-test",           ["t6", "t22", "t23", "t24", "t25", "t27"]}]),
 
     %% remove the entire exchange
-    exchange_op_callback(X, delete, [RemainingBindings]),
+    exchange_op_callback(X, delete, []),
     %% none should match now
     test_topic_expect_match(X, [{"a.b.c", []}, {"b.b.c", []}, {"", []}]),
     passed.

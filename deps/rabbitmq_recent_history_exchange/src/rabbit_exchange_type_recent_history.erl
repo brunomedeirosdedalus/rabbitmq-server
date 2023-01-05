@@ -8,14 +8,13 @@
 
 -include_lib("rabbit_common/include/rabbit.hrl").
 -include_lib("rabbit_common/include/rabbit_framing.hrl").
--include("rabbit_recent_history.hrl").
 
 -behaviour(rabbit_exchange_type).
 
 -import(rabbit_misc, [table_lookup/2]).
 
 -export([description/0, serialise_events/0, route/2]).
--export([validate/1, validate_binding/2, create/2, delete/3, add_binding/3,
+-export([validate/1, validate_binding/2, create/2, delete/2, add_binding/3,
          remove_bindings/3, assert_args_equivalence/2, policy_changed/2]).
 -export([setup_schema/0, disable_plugin/0]).
 -export([info/1, info/2]).
@@ -28,8 +27,8 @@
                     {requires, rabbit_registry},
                     {enables, kernel_ready}]}).
 
--rabbit_boot_step({rabbit_exchange_type_recent_history_mnesia,
-                   [{description, "recent history exchange type: mnesia"},
+-rabbit_boot_step({rabbit_exchange_type_recent_history_metadata_store,
+                   [{description, "recent history exchange type: metadata store"},
                     {mfa, {?MODULE, setup_schema, []}},
                     {requires, database},
                     {enables, external_infrastructure}]}).
@@ -70,19 +69,13 @@ validate(#exchange{arguments = Args}) ->
     end.
 
 validate_binding(_X, _B) -> ok.
-create(_Tx, _X) -> ok.
+create(_Serial, _X) -> ok.
 policy_changed(_X1, _X2) -> ok.
 
-delete(transaction, #exchange{ name = XName }, _Bs) ->
-    rabbit_misc:execute_mnesia_transaction(
-      fun() ->
-              mnesia:delete(?RH_TABLE, XName, write)
-      end),
-    ok;
-delete(none, _Exchange, _Bs) ->
-    ok.
+delete(none, #exchange{ name = XName }) ->
+    rabbit_db_rh_exchange:delete(XName).
 
-add_binding(transaction, #exchange{ name = XName },
+add_binding(none, #exchange{ name = XName },
             #binding{ destination = #resource{kind = queue} = QName }) ->
     case rabbit_amqqueue:lookup(QName) of
         {error, not_found} ->
@@ -92,7 +85,7 @@ add_binding(transaction, #exchange{ name = XName },
             deliver_messages([Q], Msgs)
     end,
     ok;
-add_binding(transaction, #exchange{ name = XName },
+add_binding(none, #exchange{ name = XName },
             #binding{ destination = #resource{kind = exchange} = DestName }) ->
     case rabbit_exchange:lookup(DestName) of
         {error, not_found} ->
@@ -110,11 +103,9 @@ add_binding(transaction, #exchange{ name = XName },
                  end
              end || Msg <- Msgs]
     end,
-    ok;
-add_binding(none, _Exchange, _Binding) ->
     ok.
 
-remove_bindings(_Tx, _X, _Bs) -> ok.
+remove_bindings(_Serial, _X, _Bs) -> ok.
 
 assert_args_equivalence(X, Args) ->
     rabbit_exchange:assert_args_equivalence(X, Args).
@@ -122,18 +113,11 @@ assert_args_equivalence(X, Args) ->
 %%----------------------------------------------------------------------------
 
 setup_schema() ->
-    mnesia:create_table(?RH_TABLE,
-                             [{attributes, record_info(fields, cached)},
-                              {record_name, cached},
-                              {type, set}]),
-    mnesia:add_table_copy(?RH_TABLE, node(), ram_copies),
-    rabbit_table:wait([?RH_TABLE]),
-    ok.
+    rabbit_db_rh_exchange:setup_schema().
 
 disable_plugin() ->
     rabbit_registry:unregister(exchange, <<"x-recent-history">>),
-    mnesia:delete_table(?RH_TABLE),
-    ok.
+    rabbit_db_rh_exchange:delete().
 
 %%----------------------------------------------------------------------------
 %%private
@@ -157,33 +141,10 @@ maybe_cache_msg(XName,
     end.
 
 cache_msg(XName, Message, Length) ->
-    rabbit_misc:execute_mnesia_transaction(
-      fun () ->
-              Cached = get_msgs_from_cache(XName),
-              store_msg(XName, Cached, Message, Length)
-      end).
+    rabbit_db_rh_exchange:insert(XName, Message, Length).
 
 get_msgs_from_cache(XName) ->
-    rabbit_misc:execute_mnesia_transaction(
-      fun () ->
-              case mnesia:read(?RH_TABLE, XName) of
-                  [] ->
-                      [];
-                  [#cached{key = XName, content=Cached}] ->
-                      Cached
-              end
-      end).
-
-store_msg(Key, Cached, Message, undefined) ->
-    store_msg0(Key, Cached, Message, ?KEEP_NB);
-store_msg(Key, Cached, Message, {_Type, Length}) ->
-    store_msg0(Key, Cached, Message, Length).
-
-store_msg0(Key, Cached, Message, Length) ->
-    mnesia:write(?RH_TABLE,
-                 #cached{key     = Key,
-                         content = [Message|lists:sublist(Cached, Length-1)]},
-                 write).
+    rabbit_db_rh_exchange:get(XName).
 
 deliver_messages(Qs, Msgs) ->
     lists:map(

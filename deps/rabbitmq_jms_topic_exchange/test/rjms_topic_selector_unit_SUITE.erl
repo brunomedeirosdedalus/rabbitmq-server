@@ -23,9 +23,8 @@
                                    , route/2
                                    , validate/1
                                    , create/2
-                                   , delete/3
+                                   , delete/2
                                    , validate_binding/2
-                                   , add_binding/3
                                    , remove_bindings/3
                                    , assert_args_equivalence/2
                                    , policy_changed/3 ]).
@@ -44,8 +43,7 @@ groups() ->
                                     validate_test,
                                     create_test,
                                     delete_test,
-                                    validate_binding_test,
-                                    add_binding_test
+                                    validate_binding_test
                                    ]}
     ].
 
@@ -88,13 +86,10 @@ create_test(_Config) ->
   ?assertEqual(ok, create(none, any_exchange)).
 
 delete_test(_Config) ->
-  ?assertEqual(ok, delete(none, any_exchange, any_bindings)).
+  ?assertEqual(ok, delete(none, any_exchange)).
 
 validate_binding_test(_Config) ->
   ?assertEqual(ok, validate_binding(any_exchange, any_bindings)).
-
-add_binding_test(_Config) ->
-  ?assertEqual(ok, add_binding(none, dummy_exchange(), dummy_binding())).
 
 dummy_exchange() ->
   #exchange{name = <<"XName">>, arguments = []}.
