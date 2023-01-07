@@ -367,7 +367,7 @@ exists_in_mnesia(Name) ->
     ets:member(rabbit_queue, Name).
 
 exists_in_khepri(Name) ->
-    rabbit_khepri:exists(khepri_queue_path(Name)).
+    ets:member(rabbit_khepri_queue, Name).
 
 get_all_by_type(Type) ->
     Pattern = amqqueue:pattern_match_on_type(Type),
@@ -551,9 +551,9 @@ khepri_queue_path(#resource{virtual_host = VHost, name = Name}) ->
     [?MODULE, queues, VHost, Name].
 
 get_in_khepri(Name) ->
-    case rabbit_khepri:get(khepri_queue_path(Name)) of
-        {ok, Q} -> {ok, Q};
-        _       -> {error, not_found}
+    case ets:lookup(rabbit_khepri_queue, Name) of
+        [X] -> {ok, X};
+        []  -> {error, not_found}
     end.
 
 get_many_in_mnesia(Table, [Name]) ->
@@ -564,12 +564,7 @@ get_many_in_mnesia(Table, Names) when is_list(Names) ->
     lists:append([ets:lookup(Table, Name) || Name <- Names]).
 
 get_many_in_khepri(Names) when is_list(Names) ->
-    lists:foldl(fun(Name, Acc) ->
-                        case get_in_khepri(Name) of
-                            {ok, X} -> [X | Acc];
-                            _ -> Acc
-                        end
-                end, [], Names).
+    lists:append([ets:lookup(rabbit_khepri_queue, Name) || Name <- Names]).
 
 delete_transient_in_mnesia_tx(QName) ->
     ok = mnesia:delete({rabbit_queue, QName}),
