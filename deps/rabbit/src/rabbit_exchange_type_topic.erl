@@ -37,25 +37,22 @@ serialise_events() -> false.
 %% NB: This may return duplicate results in some situations (that's ok)
 route(#exchange{name = XName},
       #delivery{message = #basic_message{routing_keys = Routes}}) ->
-    lists:append([begin
-                      rabbit_db_topic_exchange:route_delivery_for_exchange_type_topic(XName, RKey)
-                  end || RKey <- Routes]).
+    lists:append([rabbit_db_topic_exchange:match(XName, RKey) || RKey <- Routes]).
 
 validate(_X) -> ok.
 validate_binding(_X, _B) -> ok.
 create(_Serial, _X) -> ok.
 
 delete(_Serial, #exchange{name = X}) ->
-    rabbit_db_topic_exchange:delete_topic_trie_bindings_for_exchange(X).
+    rabbit_db_topic_exchange:delete_all_for_exchange(X).
 
 policy_changed(_X1, _X2) -> ok.
 
-add_binding(_Serial, _Exchange, #binding{source = X, key = K, destination = D,
-                                         args = Args}) ->
-    rabbit_db_topic_exchange:add_topic_trie_binding(X, K, D, Args).
+add_binding(_Serial, _Exchange, Binding) ->
+    rabbit_db_topic_exchange:insert(Binding).
 
 remove_bindings(_Serial, _X, Bs) ->
-    rabbit_db_topic_exchange:delete_topic_trie_bindings(Bs).
+    rabbit_db_topic_exchange:delete(Bs).
 
 assert_args_equivalence(X, Args) ->
     rabbit_exchange:assert_args_equivalence(X, Args).

@@ -10,8 +10,7 @@
 -include_lib("khepri/include/khepri.hrl").
 -include_lib("rabbit_common/include/rabbit.hrl").
 
--export([add_topic_trie_binding/4, delete_topic_trie_bindings_for_exchange/1,
-         delete_topic_trie_bindings/1, route_delivery_for_exchange_type_topic/2]).
+-export([insert/1, delete_all_for_exchange/1, delete/1, match/2]).
 
 -export([mnesia_write_to_khepri/2, mnesia_delete_to_khepri/2, clear_data_in_khepri/1]).
 
@@ -26,36 +25,77 @@
 -define(ANYTHING, <<".*">>).
 -define(ZERO_OR_MORE, <<"(\\..+)?">>).
 
-%% API
-%% --------------------------------------------------------------
+%% -------------------------------------------------------------------
+%% insert().
+%% -------------------------------------------------------------------
 
-add_topic_trie_binding(XName, RoutingKey, Destination, Args) ->
+-spec insert(Binding) -> ok when
+      Binding :: rabbit_types:binding().
+%% @doc Inserts a topic binding.
+%%
+%% @private
+
+insert(#binding{source = XName, key = RoutingKey, destination = Destination, args = Args}) ->
     rabbit_db:run(
-      #{mnesia => fun() -> add_topic_trie_binding_in_mnesia(XName, RoutingKey, Destination, Args) end,
-        khepri => fun() -> add_topic_trie_binding_in_khepri(XName, RoutingKey, Destination, Args) end
+      #{mnesia => fun() -> insert_in_mnesia(XName, RoutingKey, Destination, Args) end,
+        khepri => fun() -> insert_in_khepri(XName, RoutingKey, Destination, Args) end
        }).
 
-delete_topic_trie_bindings_for_exchange(XName) ->
+%% -------------------------------------------------------------------
+%% delete_all_for_exchange().
+%% -------------------------------------------------------------------
+
+-spec delete_all_for_exchange(ExchangeName) -> ok when
+      ExchangeName :: rabbit_types:r('exchange').
+%% @doc Deletes all topic bindings for the exchange named `ExchangeName'
+%%
+%% @private
+
+delete_all_for_exchange(XName) ->
     rabbit_db:run(
-      #{mnesia => fun() -> delete_topic_trie_bindings_for_exchange_in_mnesia(XName) end,
-        khepri => fun() -> delete_topic_trie_bindings_for_exchange_in_khepri(XName) end
+      #{mnesia => fun() -> delete_all_for_exchange_in_mnesia(XName) end,
+        khepri => fun() -> delete_all_for_exchange_in_khepri(XName) end
        }).
 
-delete_topic_trie_bindings(Bs) ->
+%% -------------------------------------------------------------------
+%% delete().
+%% -------------------------------------------------------------------
+
+-spec delete([Binding]) -> ok when
+      Binding :: rabbit_types:binding().
+%% @doc Deletes all given topic bindings
+%%
+%% @private
+
+delete(Bs) when is_list(Bs) ->
     rabbit_db:run(
-      #{mnesia => fun() -> delete_topic_trie_bindings_in_mnesia(Bs) end,
-        khepri => fun() -> delete_topic_trie_bindings_in_khepri(Bs) end
+      #{mnesia => fun() -> delete_in_mnesia(Bs) end,
+        khepri => fun() -> delete_in_khepri(Bs) end
        }).
 
-route_delivery_for_exchange_type_topic(XName, RoutingKey) ->
+%% -------------------------------------------------------------------
+%% match().
+%% -------------------------------------------------------------------
+
+-spec match(ExchangeName, RoutingKey) -> ok when
+      ExchangeName :: rabbit_types:r('exchange'),
+      RoutingKey :: binary().
+%% @doc Finds the topic binding matching the given exchange and routing key and returns
+%% the destination of the binding
+%%
+%% @returns a list of resources
+%%
+%% @private
+
+match(XName, RoutingKey) ->
     rabbit_db:run(
       #{mnesia =>
             fun() ->
-                    route_delivery_for_exchange_type_topic_in_mnesia(XName, RoutingKey)
+                    match_in_mnesia(XName, RoutingKey)
             end,
         khepri =>
             fun() ->
-                    route_delivery_for_exchange_type_topic_in_khepri(XName, RoutingKey)
+                    match_in_khepri(XName, RoutingKey)
             end
        }).
 
@@ -85,7 +125,7 @@ mnesia_write_to_khepri(rabbit_topic_trie_binding, TrieBindings0) ->
                    Bindings = lists:foldl(fun(SetOfBindings, Acc) ->
                                                   sets:to_list(SetOfBindings) ++ Acc
                                           end, [], Values),
-                   [add_topic_trie_binding_tx(X, K, D, Args) || #binding{key = K,
+                   [insert_in_khepri_tx(X, K, D, Args) || #binding{key = K,
                                                                          args = Args} <- Bindings]
                end || {X, D} <- TrieBindings]
       end);
@@ -152,7 +192,7 @@ trie_records_to_key(Records) ->
 
 %% Internal
 %% --------------------------------------------------------------
-add_topic_trie_binding_in_mnesia(XName, RoutingKey, Destination, Args) ->
+insert_in_mnesia(XName, RoutingKey, Destination, Args) ->
     rabbit_misc:execute_mnesia_transaction(
       fun() ->
               FinalNode = follow_down_create(XName, split_topic_key(RoutingKey)),
@@ -160,7 +200,7 @@ add_topic_trie_binding_in_mnesia(XName, RoutingKey, Destination, Args) ->
               ok
       end).
 
-add_topic_trie_binding_in_khepri(XName, RoutingKey, Destination, Args) ->
+insert_in_khepri(XName, RoutingKey, Destination, Args) ->
     Path = khepri_exchange_type_topic_path(XName) ++ split_topic_key_binary(RoutingKey),
     {Path0, [Last]} = lists:split(length(Path) - 1, Path),
     Binding = #{destination => Destination, arguments => Args},
@@ -174,7 +214,7 @@ add_topic_trie_binding_in_khepri(XName, RoutingKey, Destination, Args) ->
             case Ret2 of
                 ok -> ok;
                 {error, {khepri, mismatching_node, _}} ->
-                    add_topic_trie_binding_in_khepri(XName, RoutingKey, Destination, Args);
+                    insert_in_khepri(XName, RoutingKey, Destination, Args);
                 {error, _} = Error -> Error
             end;
         _ ->
@@ -182,7 +222,7 @@ add_topic_trie_binding_in_khepri(XName, RoutingKey, Destination, Args) ->
             rabbit_khepri:put(Path, Set)
     end.
 
-add_topic_trie_binding_tx(XName, RoutingKey, Destination, Args) ->
+insert_in_khepri_tx(XName, RoutingKey, Destination, Args) ->
     Path = khepri_exchange_type_topic_path(XName) ++ split_topic_key_binary(RoutingKey),
     Binding = #{destination => Destination, arguments => Args},
     Set0 = case khepri_tx:get(Path) of
@@ -193,7 +233,7 @@ add_topic_trie_binding_tx(XName, RoutingKey, Destination, Args) ->
     Set = sets:add_element(Binding, Set0),
     ok = khepri_tx:put(Path, Set).
 
-delete_topic_trie_bindings_for_exchange_in_mnesia(XName) ->
+delete_all_for_exchange_in_mnesia(XName) ->
     rabbit_misc:execute_mnesia_transaction(
       fun() ->
               trie_remove_all_nodes(XName),
@@ -202,14 +242,14 @@ delete_topic_trie_bindings_for_exchange_in_mnesia(XName) ->
               ok
       end).
 
-delete_topic_trie_bindings_for_exchange_in_khepri(XName) ->
+delete_all_for_exchange_in_khepri(XName) ->
     ok = rabbit_khepri:delete(khepri_exchange_type_topic_path(XName)).
 
-route_delivery_for_exchange_type_topic_in_mnesia(XName, RoutingKey) ->
+match_in_mnesia(XName, RoutingKey) ->
     Words = split_topic_key(RoutingKey),
     mnesia:async_dirty(fun trie_match/2, [XName, Words]).
 
-route_delivery_for_exchange_type_topic_in_khepri(XName, RoutingKey) ->
+match_in_khepri(XName, RoutingKey) ->
     Root = khepri_exchange_type_topic_path(XName) ++ [rabbit_db:if_has_data_wildcard()],
     case rabbit_khepri:fold(
            Root,
@@ -250,7 +290,7 @@ remove_all(Table, Pattern) ->
     lists:foreach(fun (R) -> mnesia:delete_object(Table, R, write) end,
                   mnesia:match_object(Table, Pattern, write)).
 
-delete_topic_trie_bindings_in_mnesia_tx(Bs) ->
+delete_in_mnesia_tx(Bs) ->
     %% See rabbit_binding:lock_route_tables for the rationale for
     %% taking table locks.
     case Bs of
@@ -271,11 +311,11 @@ delete_topic_trie_bindings_in_mnesia_tx(Bs) ->
      end ||  #binding{source = X, key = K, destination = D, args = Args} <- Bs],
     ok.
 
-delete_topic_trie_bindings_in_mnesia(Bs) ->
+delete_in_mnesia(Bs) ->
     rabbit_misc:execute_mnesia_transaction(
-      fun() -> delete_topic_trie_bindings_in_mnesia_tx(Bs) end).
+      fun() -> delete_in_mnesia_tx(Bs) end).
 
-delete_topic_trie_bindings_in_khepri(Bs) ->
+delete_in_khepri(Bs) ->
     %% Let's handle bindings data outside of the transaction for efficiency
     Data = [begin
                 Path = khepri_exchange_type_topic_path(X) ++ split_topic_key_binary(K),

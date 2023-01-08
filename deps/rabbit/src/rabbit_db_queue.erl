@@ -346,8 +346,8 @@ update_in_khepri(#resource{virtual_host = VHost, name = Name} = QName, Fun) ->
 
 update_decorators(Name, Decorators) ->
     rabbit_db:run(
-      #{khepri => fun() -> update_decorators_in_mnesia(Name, Decorators) end,
-        mnesia => fun() -> update_decorators_in_khepri(Name, Decorators) end
+      #{mnesia => fun() -> update_decorators_in_mnesia(Name, Decorators) end,
+        khepri => fun() -> update_decorators_in_khepri(Name, Decorators) end
        }).
 
 not_found_or_absent_queue_dirty(Name) ->
