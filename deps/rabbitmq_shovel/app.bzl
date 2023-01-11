@@ -117,7 +117,7 @@ def all_beam_files(name = "all_beam_files"):
         hdrs = ["include/rabbit_shovel.hrl"],
         app_name = "rabbitmq_shovel",
         erlc_opts = "//:erlc_opts",
-        deps = ["//deps/amqp_client:erlang_app"],
+        deps = ["//deps/amqp_client:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
     erlang_bytecode(
         name = "ebin_rabbit_shovel_status_beam",
@@ -291,7 +291,7 @@ def all_test_beam_files(name = "all_test_beam_files"):
         hdrs = ["include/rabbit_shovel.hrl"],
         app_name = "rabbitmq_shovel",
         erlc_opts = "//:test_erlc_opts",
-        deps = ["//deps/amqp_client:erlang_app"],
+        deps = ["//deps/amqp_client:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
     erlang_bytecode(
         name = "test_rabbit_shovel_status_beam",

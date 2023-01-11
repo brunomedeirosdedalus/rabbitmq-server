@@ -23,6 +23,9 @@ all_srcs(name = "all_srcs")
 
 test_suite_beam_files(name = "test_suite_beam_files")
 
+# gazelle:erlang_app_dep_ignore amqp_client
+# gazelle:erlang_app_dep_ignore rabbitmq_ct_helpers
+
 rabbitmq_app(
     name = "erlang_app",
     srcs = [":all_srcs"],

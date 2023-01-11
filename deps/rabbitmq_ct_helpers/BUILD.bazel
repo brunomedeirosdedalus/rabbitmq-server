@@ -24,6 +24,10 @@ all_test_beam_files(name = "all_test_beam_files")
 
 test_suite_beam_files(name = "test_suite_beam_files")
 
+# gazelle:erlang_app_dep_ignore rabbit
+# gazelle:erlang_app_dep_ignore rabbit_common
+# gazelle:erlang_app_dep_ignore rabbitmq_prelaunch
+
 rabbitmq_app(
     name = "erlang_app",
     srcs = [":all_srcs"],

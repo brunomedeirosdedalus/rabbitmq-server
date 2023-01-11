@@ -56,7 +56,7 @@ git_repository(
 
 git_repository(
     name = "rules_erlang",
-    branch = "experimental-gazelle-extension",
+    branch = "experimental-gazelle-extension-runtime-heuristics",
     remote = "https://github.com/rabbitmq/rules_erlang.git",
 )
 

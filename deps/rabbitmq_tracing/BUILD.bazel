@@ -41,6 +41,7 @@ test_suite_beam_files(name = "test_suite_beam_files")
 # gazelle:erlang_app_dep rabbit_common
 # gazelle:erlang_app_dep rabbitmq_management
 # gazelle:erlang_app_dep rabbit
+# gazelle:erlang_app_dep_ignore amqp_client
 
 rabbitmq_app(
     name = "erlang_app",

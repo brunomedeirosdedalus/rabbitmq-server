@@ -38,6 +38,7 @@ test_suite_beam_files(name = "test_suite_beam_files")
 # gazelle:erlang_app_dep rabbitmq_management_agent
 # gazelle:erlang_app_dep rabbitmq_web_dispatch
 # gazelle:erlang_app_dep accept
+# gazelle:erlang_app_dep_ignore rabbit_common
 
 rabbitmq_app(
     name = "erlang_app",
