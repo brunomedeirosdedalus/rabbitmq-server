@@ -59,6 +59,14 @@ Note: This takes quite some time on a single machine.
 
 `bazel test //deps/rabbit:lazy_queue_SUITE`
 
+## Add/update an external dependency from hex.pm
+
+`bazel run gazelle -- update-repos --verbose --build_files_dir=bazel -to_macro=workspace_helpers.bzl%rabbitmq_external_deps hex.pm/accept@0.3.5`
+
+## Update BUILD files
+
+`bazel run gazelle`
+
 ## Additional Useful Commands
 
 - Format all bazel files consistently (requires [buildifier](https://github.com/bazelbuild/buildtools/blob/master/buildifier/README.md)):
