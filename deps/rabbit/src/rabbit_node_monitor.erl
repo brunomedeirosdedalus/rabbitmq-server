@@ -165,7 +165,7 @@ notify_joined_cluster() ->
     NewMember = node(),
     Nodes = rabbit_nodes:all_running() -- [NewMember],
     gen_server:abcast(Nodes, ?SERVER,
-                      {joined_cluster, node(), rabbit_mnesia:node_type()}),
+                      {joined_cluster, node(), rabbit_db_cluster:node_type()}),
 
     ok.
 
@@ -411,7 +411,7 @@ handle_call(_Request, _From, State) ->
 handle_cast(notify_node_up, State = #state{guid = GUID}) ->
     Nodes = rabbit_nodes:all_running() -- [node()],
     gen_server:abcast(Nodes, ?SERVER,
-                      {node_up, node(), rabbit_mnesia:node_type(), GUID}),
+                      {node_up, node(), rabbit_db_cluster:node_type(), GUID}),
     %% register other active rabbits with this rabbit
     DiskNodes = rabbit_mnesia:cluster_nodes(disc),
     [gen_server:cast(?SERVER, {node_up, N, case lists:member(N, DiskNodes) of
