@@ -31,9 +31,9 @@ bazel_dep(
 archive_override(
     module_name = "rules_erlang",
     urls = [
-        "https://github.com/rabbitmq/rules_erlang/archive/refs/heads/experimental-gazelle-extension-runtime-heuristics.zip"
+        "https://github.com/rabbitmq/rules_erlang/archive/refs/heads/main.zip"
     ],
-    strip_prefix = "rules_erlang-experimental-gazelle-extension-runtime-heuristics",
+    strip_prefix = "rules_erlang-main",
 )
 
 erlang_config = use_extension(
