@@ -189,7 +189,8 @@ get_all_for_source_in_mnesia(Resource) ->
     [B || #route{binding = B} <- rabbit_db:list_in_mnesia(rabbit_route, Route)].
 
 get_all_for_source_in_khepri(Resource) ->
-    ets:lookup(rabbit_khepri_bindings, Resource).
+    Route = #route{binding = #binding{source = Resource, _ = '_'}},
+    [B || #route{binding = B} <- ets:match_object(rabbit_khepri_bindings, Route)].
 
 -spec get_all_for_destination(Dst) -> [Binding] when
       Dst :: rabbit_types:r('exchange') | rabbit_types:r('queue'),
@@ -215,8 +216,8 @@ get_all_for_destination_in_mnesia(Resource) ->
 
 get_all_for_destination_in_khepri(Destination) ->
      %% TODO: projection for bindings indexed by destination?
-    Match = #binding{destination = Destination,
-                     _           = '_'},
+    Match = #route{binding = #binding{destination = Destination,
+                                      _           = '_'}},
     ets:match_object(rabbit_khepri_bindings, Match).
 
 -spec get_all(Src, Dst) -> [Binding] when
@@ -243,10 +244,10 @@ get_all_in_mnesia(SrcName, DstName) ->
     [B || #route{binding = B} <- rabbit_db:list_in_mnesia(rabbit_route, Route)].
 
 get_all_in_khepri(SrcName, DstName) ->
-    Match = #binding{source      = SrcName,
-                     destination = DstName,
-                     _           = '_'},
-    ets:match_object(rabbit_khepri_bindings, Match).
+    MatchHead = #route{binding = #binding{source      = SrcName,
+                                          destination = DstName,
+                                          _           = '_'}},
+    [B || #route{binding = B} <- ets:match_object(rabbit_khepri_bindings, MatchHead)].
 
 -spec get_all_explicit() -> [Binding] when
       Binding :: rabbit_types:binding().
@@ -367,8 +368,10 @@ match_in_mnesia(SrcName, Match) ->
                  Routes, Match(Binding)].
 
 match_in_khepri(SrcName, Match) ->
-    Routes = ets:lookup(rabbit_khepri_bindings, SrcName),
-    [Dest || Binding = #binding{destination = Dest} <-
+    MatchHead = #route{binding = #binding{source      = SrcName,
+                                          _           = '_'}},
+    Routes = ets:select(rabbit_khepri_bindings, [{MatchHead, [], [['$_']]}]),
+    [Dest || [#route{binding = Binding = #binding{destination = Dest}}] <-
                  Routes, Match(Binding)].
 
 match_routing_key(SrcName, RoutingKeys, UseIndex) ->
