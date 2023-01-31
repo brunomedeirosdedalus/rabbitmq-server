@@ -674,7 +674,7 @@ update_in_mnesia_tx(Name, Fun) ->
     Table = {rabbit_exchange, Name},
     case mnesia:wread(Table) of
         [X] -> X1 = Fun(X),
-               insert_in_mnesia(X1);
+               insert_in_mnesia([X1]);
         [] -> not_found
     end.
 
