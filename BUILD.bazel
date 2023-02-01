@@ -1,4 +1,3 @@
-load("@rules_erlang//:erlang_bytecode2.bzl", "erlc_opts")
 load(
     "@bazel_skylib//rules:common_settings.bzl",
     "bool_flag",
@@ -7,11 +6,10 @@ load(
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@bazel_gazelle//:def.bzl", "gazelle")
 load("@rules_erlang//gazelle:def.bzl", "GAZELLE_ERLANG_RUNTIME_DEPS")
+load("@rules_erlang//:erlang_bytecode2.bzl", "erlc_opts")
 load("@rules_erlang//:dialyze.bzl", "plt")
 load("@rules_erlang//:shell.bzl", "shell")
 load("@rules_erlang//:erl_eval.bzl", "erl_eval")
-load("@bazel_gazelle//:def.bzl", "gazelle")
-load("@rules_erlang//gazelle:def.bzl", "GAZELLE_ERLANG_RUNTIME_DEPS")
 load("//bazel/elixir:iex_eval.bzl", "iex_eval")
 load(":rabbitmq_home.bzl", "rabbitmq_home")
 load(":rabbitmq_run.bzl", "rabbitmq_run", "rabbitmq_run_command")
@@ -26,10 +24,26 @@ exports_files([
 ])
 
 # gazelle:prefix github.com/rabbitmq/rabbitmq-server
+# gazelle:exclude .github
+# gazelle:exclude .elixir_ls
+# gazelle:exclude bazel
+# gazelle:exclude bazel-out
+# gazelle:exclude deps/*/priv
+# gazelle:erlang_apps_dirs deps
+# gazelle:erlang_skip_rules test_erlang_app
+# gazelle:erlang_skip_rules ct_test
+# gazelle:erlang_generate_beam_files_macro
+# gazelle:map_kind erlang_app rabbitmq_app //:rabbitmq.bzl
+# gazelle:map_kind assert_suites2 assert_suites //:rabbitmq.bzl
+
+# gazelle:erlang_behaviour_source_lib Elixir.RabbitMQ.CLI.CommandBehaviour:rabbitmq_cli
 
 gazelle(
     name = "gazelle",
     data = GAZELLE_ERLANG_RUNTIME_DEPS,
+    extra_args = [
+        "--verbose",
+    ],
     gazelle = "@rules_erlang//gazelle:gazelle_erlang_binary",
 )
 
@@ -61,30 +75,6 @@ string_flag(
     name = "elixir_home",
     build_setting_default = "",
     visibility = ["//visibility:public"],
-)
-
-# gazelle:prefix github.com/rabbitmq/rabbitmq-server
-# gazelle:exclude .github
-# gazelle:exclude .elixir_ls
-# gazelle:exclude bazel
-# gazelle:exclude bazel-out
-# gazelle:exclude deps/*/priv
-# gazelle:erlang_apps_dirs deps
-# gazelle:erlang_skip_rules test_erlang_app
-# gazelle:erlang_skip_rules ct_test
-# gazelle:erlang_generate_beam_files_macro
-# gazelle:map_kind erlang_app rabbitmq_app //:rabbitmq.bzl
-# gazelle:map_kind assert_suites2 assert_suites //:rabbitmq.bzl
-
-# gazelle:erlang_behaviour_source_lib Elixir.RabbitMQ.CLI.CommandBehaviour:rabbitmq_cli
-
-gazelle(
-    name = "gazelle",
-    data = GAZELLE_ERLANG_RUNTIME_DEPS,
-    extra_args = [
-        "--verbose",
-    ],
-    gazelle = "@rules_erlang//gazelle:gazelle_erlang_binary",
 )
 
 plt(
