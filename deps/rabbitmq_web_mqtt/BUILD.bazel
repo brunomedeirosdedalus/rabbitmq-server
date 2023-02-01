@@ -107,7 +107,6 @@ rabbitmq_integration_suite(
     name = "proxy_protocol_SUITE",
     additional_beam = [
         "test/src/rabbit_ws_test_util.beam",
-        "test/src/emqttc_serialiser.beam",
         "test/src/rfc6455_client.beam",
     ],
 )
@@ -115,8 +114,6 @@ rabbitmq_integration_suite(
 rabbitmq_integration_suite(
     name = "system_SUITE",
     additional_beam = [
-        "test/src/emqttc_parser.beam",
-        "test/src/emqttc_serialiser.beam",
         "test/src/rfc6455_client.beam",
     ],
 )

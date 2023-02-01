@@ -217,8 +217,8 @@ def rabbitmq_integration_suite(
         ":test_erlang_app",
         "//deps/rabbit_common:erlang_app",
         "//deps/rabbitmq_ct_helpers:erlang_app",
-        "//bazel/elixir:erlang_app",
-        "//deps/rabbitmq_cli:rabbitmqctl",
+        "//deps/rabbitmq_cli:elixir",
+        "//deps/rabbitmq_cli:erlang_app",
         "//deps/rabbitmq_ct_client_helpers:erlang_app",
     ]
     package = native.package_name()
@@ -275,7 +275,7 @@ def rabbitmq_integration_suite(
             "RABBITMQCTL": "$TEST_SRCDIR/$TEST_WORKSPACE/{}/broker-for-tests-home/sbin/rabbitmqctl".format(package),
             "RABBITMQ_PLUGINS": "$TEST_SRCDIR/$TEST_WORKSPACE/{}/broker-for-tests-home/sbin/rabbitmq-plugins".format(package),
             "RABBITMQ_QUEUES": "$TEST_SRCDIR/$TEST_WORKSPACE/{}/broker-for-tests-home/sbin/rabbitmq-queues".format(package),
-            "RABBITMQ_RUN_SECONDARY": "$TEST_SRCDIR/_main~secondary_umbrella~rabbitmq-server-generic-unix-3.11/rabbitmq-run",
+            "RABBITMQ_RUN_SECONDARY": "$(location @rabbitmq-server-generic-unix-3.11//:rabbitmq-run)",
             "LANG": "C.UTF-8",
         }.items() + test_env.items()),
         tools = [

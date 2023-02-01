@@ -111,7 +111,6 @@ def test_suite_beam_files(name = "test_suite_beam_files"):
         testonly = True,
         srcs = ["test/proxy_protocol_SUITE.erl"],
         outs = ["test/proxy_protocol_SUITE.beam"],
-        hdrs = ["test/src/emqttc_packet.hrl"],
         erlc_opts = "//:test_erlc_opts",
     )
     erlang_bytecode(
@@ -119,7 +118,6 @@ def test_suite_beam_files(name = "test_suite_beam_files"):
         testonly = True,
         srcs = ["test/system_SUITE.erl"],
         outs = ["test/system_SUITE.beam"],
-        hdrs = ["test/src/emqttc_packet.hrl"],
         erlc_opts = "//:test_erlc_opts",
     )
 
