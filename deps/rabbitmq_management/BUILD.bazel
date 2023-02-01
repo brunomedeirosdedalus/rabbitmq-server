@@ -214,6 +214,9 @@ eunit(
         "rabbit_mgmt_wm_vhost_restart",
         "rabbit_mgmt_wm_vhosts",
         "rabbit_mgmt_wm_whoami",
+        "rabbit_mgmt_login",
+        "rabbit_mgmt_wm_environment",
+        "rabbit_mgmt_wm_hash_password",
     ],
     deps = [":test_erlang_app"],
 )

@@ -3,8 +3,8 @@ load("@rules_erlang//:xref2.bzl", "xref")
 load("@rules_erlang//:dialyze.bzl", "dialyze", "plt")
 load(
     "//:rabbitmq.bzl",
-    "RABBITMQ_DIALYZER_OPTS",
     "BROKER_VERSION_REQUIREMENTS_ANY",
+    "RABBITMQ_DIALYZER_OPTS",
     "assert_suites",
     "broker_for_integration_suites",
     "rabbitmq_app",
@@ -109,7 +109,11 @@ dialyze(
 
 eunit(
     name = "eunit",
-    compiled_suites = [":test_rabbit_auth_backend_mqtt_mock_beam"],
+    compiled_suites = [
+        ":test_rabbit_auth_backend_mqtt_mock_beam",
+        ":test_event_recorder_beam",
+        ":test_util_beam",
+    ],
     eunit_mods = [
         "Elixir.RabbitMQ.CLI.Ctl.Commands.DecommissionMqttNodeCommand",
         "Elixir.RabbitMQ.CLI.Ctl.Commands.ListMqttConnectionsCommand",
@@ -119,9 +123,6 @@ eunit(
         "rabbit_auth_backend_mqtt_mock",
         "rabbit_mqtt",
         "rabbit_mqtt_collector",
-        "rabbit_mqtt_connection_info",
-        "rabbit_mqtt_connection_sup",
-        "rabbit_mqtt_frame",
         "rabbit_mqtt_internal_event_handler",
         "rabbit_mqtt_processor",
         "rabbit_mqtt_reader",
@@ -133,6 +134,13 @@ eunit(
         "rabbit_mqtt_retainer_sup",
         "rabbit_mqtt_sup",
         "rabbit_mqtt_util",
+        "event_recorder",
+        "rabbit_mqtt_confirms",
+        "rabbit_mqtt_ff",
+        "rabbit_mqtt_keepalive",
+        "rabbit_mqtt_packet",
+        "rabbit_mqtt_qos0_queue",
+        "util",
     ],
     deps = [":test_erlang_app"],
 )

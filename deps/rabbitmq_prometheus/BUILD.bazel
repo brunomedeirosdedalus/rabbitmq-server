@@ -52,6 +52,7 @@ rabbitmq_app(
         "//deps/rabbitmq_management_agent:erlang_app",
         "//deps/rabbitmq_web_dispatch:erlang_app",
         "@accept//:erlang_app",
+        "@cowboy//:erlang_app",
         "@prometheus//:erlang_app",
     ],
 )

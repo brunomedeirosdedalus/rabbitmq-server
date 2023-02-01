@@ -4,7 +4,7 @@ load("@rules_erlang//:filegroup.bzl", "filegroup")
 def all_beam_files(name = "all_beam_files"):
     filegroup(
         name = "beam_files",
-        srcs = ["ebin/rabbit_web_mqtt_app.beam", "ebin/rabbit_web_mqtt_connection_info.beam", "ebin/rabbit_web_mqtt_connection_sup.beam", "ebin/rabbit_web_mqtt_handler.beam", "ebin/rabbit_web_mqtt_middleware.beam", "ebin/rabbit_web_mqtt_stream_handler.beam"],
+        srcs = ["ebin/rabbit_web_mqtt_app.beam", "ebin/rabbit_web_mqtt_handler.beam", "ebin/rabbit_web_mqtt_stream_handler.beam"],
     )
     erlang_bytecode(
         name = "ebin_rabbit_web_mqtt_app_beam",
@@ -13,37 +13,16 @@ def all_beam_files(name = "all_beam_files"):
         app_name = "rabbitmq_web_mqtt",
         erlc_opts = "//:erlc_opts",
     )
-    erlang_bytecode(
-        name = "ebin_rabbit_web_mqtt_connection_info_beam",
-        srcs = ["src/rabbit_web_mqtt_connection_info.erl"],
-        outs = ["ebin/rabbit_web_mqtt_connection_info.beam"],
-        app_name = "rabbitmq_web_mqtt",
-        erlc_opts = "//:erlc_opts",
-    )
-    erlang_bytecode(
-        name = "ebin_rabbit_web_mqtt_connection_sup_beam",
-        srcs = ["src/rabbit_web_mqtt_connection_sup.erl"],
-        outs = ["ebin/rabbit_web_mqtt_connection_sup.beam"],
-        app_name = "rabbitmq_web_mqtt",
-        erlc_opts = "//:erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app", "@ranch//:erlang_app"],
-    )
+
     erlang_bytecode(
         name = "ebin_rabbit_web_mqtt_handler_beam",
         srcs = ["src/rabbit_web_mqtt_handler.erl"],
         outs = ["ebin/rabbit_web_mqtt_handler.beam"],
         app_name = "rabbitmq_web_mqtt",
         erlc_opts = "//:erlc_opts",
-        deps = ["//deps/amqp_client:erlang_app", "@cowboy//:erlang_app"],
+        deps = ["//deps/amqp_client:erlang_app", "//deps/rabbit_common:erlang_app", "//deps/rabbitmq_mqtt:erlang_app", "@cowboy//:erlang_app"],
     )
-    erlang_bytecode(
-        name = "ebin_rabbit_web_mqtt_middleware_beam",
-        srcs = ["src/rabbit_web_mqtt_middleware.erl"],
-        outs = ["ebin/rabbit_web_mqtt_middleware.beam"],
-        app_name = "rabbitmq_web_mqtt",
-        erlc_opts = "//:erlc_opts",
-        deps = ["@cowboy//:erlang_app"],
-    )
+
     erlang_bytecode(
         name = "ebin_rabbit_web_mqtt_stream_handler_beam",
         srcs = ["src/rabbit_web_mqtt_stream_handler.erl"],
@@ -57,7 +36,7 @@ def all_test_beam_files(name = "all_test_beam_files"):
     filegroup(
         name = "test_beam_files",
         testonly = True,
-        srcs = ["test/rabbit_web_mqtt_app.beam", "test/rabbit_web_mqtt_connection_info.beam", "test/rabbit_web_mqtt_connection_sup.beam", "test/rabbit_web_mqtt_handler.beam", "test/rabbit_web_mqtt_middleware.beam", "test/rabbit_web_mqtt_stream_handler.beam"],
+        srcs = ["test/rabbit_web_mqtt_app.beam", "test/rabbit_web_mqtt_handler.beam", "test/rabbit_web_mqtt_stream_handler.beam"],
     )
     erlang_bytecode(
         name = "test_rabbit_web_mqtt_app_beam",
@@ -67,23 +46,7 @@ def all_test_beam_files(name = "all_test_beam_files"):
         app_name = "rabbitmq_web_mqtt",
         erlc_opts = "//:test_erlc_opts",
     )
-    erlang_bytecode(
-        name = "test_rabbit_web_mqtt_connection_info_beam",
-        testonly = True,
-        srcs = ["src/rabbit_web_mqtt_connection_info.erl"],
-        outs = ["test/rabbit_web_mqtt_connection_info.beam"],
-        app_name = "rabbitmq_web_mqtt",
-        erlc_opts = "//:test_erlc_opts",
-    )
-    erlang_bytecode(
-        name = "test_rabbit_web_mqtt_connection_sup_beam",
-        testonly = True,
-        srcs = ["src/rabbit_web_mqtt_connection_sup.erl"],
-        outs = ["test/rabbit_web_mqtt_connection_sup.beam"],
-        app_name = "rabbitmq_web_mqtt",
-        erlc_opts = "//:test_erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app", "@ranch//:erlang_app"],
-    )
+
     erlang_bytecode(
         name = "test_rabbit_web_mqtt_handler_beam",
         testonly = True,
@@ -91,17 +54,9 @@ def all_test_beam_files(name = "all_test_beam_files"):
         outs = ["test/rabbit_web_mqtt_handler.beam"],
         app_name = "rabbitmq_web_mqtt",
         erlc_opts = "//:test_erlc_opts",
-        deps = ["//deps/amqp_client:erlang_app", "@cowboy//:erlang_app"],
+        deps = ["//deps/amqp_client:erlang_app", "//deps/rabbit_common:erlang_app", "//deps/rabbitmq_mqtt:erlang_app", "@cowboy//:erlang_app"],
     )
-    erlang_bytecode(
-        name = "test_rabbit_web_mqtt_middleware_beam",
-        testonly = True,
-        srcs = ["src/rabbit_web_mqtt_middleware.erl"],
-        outs = ["test/rabbit_web_mqtt_middleware.beam"],
-        app_name = "rabbitmq_web_mqtt",
-        erlc_opts = "//:test_erlc_opts",
-        deps = ["@cowboy//:erlang_app"],
-    )
+
     erlang_bytecode(
         name = "test_rabbit_web_mqtt_stream_handler_beam",
         testonly = True,
@@ -136,7 +91,7 @@ def all_srcs(name = "all_srcs"):
 
     filegroup(
         name = "srcs",
-        srcs = ["src/rabbit_web_mqtt_app.erl", "src/rabbit_web_mqtt_connection_info.erl", "src/rabbit_web_mqtt_connection_sup.erl", "src/rabbit_web_mqtt_handler.erl", "src/rabbit_web_mqtt_middleware.erl", "src/rabbit_web_mqtt_stream_handler.erl"],
+        srcs = ["src/rabbit_web_mqtt_app.erl", "src/rabbit_web_mqtt_handler.erl", "src/rabbit_web_mqtt_stream_handler.erl"],
     )
     filegroup(
         name = "private_hdrs",
@@ -167,22 +122,7 @@ def test_suite_beam_files(name = "test_suite_beam_files"):
         hdrs = ["test/src/emqttc_packet.hrl"],
         erlc_opts = "//:test_erlc_opts",
     )
-    erlang_bytecode(
-        name = "test_src_emqttc_parser_beam",
-        testonly = True,
-        srcs = ["test/src/emqttc_parser.erl"],
-        outs = ["test/src/emqttc_parser.beam"],
-        hdrs = ["test/src/emqttc_packet.hrl"],
-        erlc_opts = "//:test_erlc_opts",
-    )
-    erlang_bytecode(
-        name = "test_src_emqttc_serialiser_beam",
-        testonly = True,
-        srcs = ["test/src/emqttc_serialiser.erl"],
-        outs = ["test/src/emqttc_serialiser.beam"],
-        hdrs = ["test/src/emqttc_packet.hrl"],
-        erlc_opts = "//:test_erlc_opts",
-    )
+
     erlang_bytecode(
         name = "test_src_rabbit_ws_test_util_beam",
         testonly = True,
