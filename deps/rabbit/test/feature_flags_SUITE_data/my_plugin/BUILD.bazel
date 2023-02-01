@@ -1,16 +1,13 @@
-load("@rules_erlang//:dialyze.bzl", "dialyze", "plt")
-load("@rules_erlang//:xref2.bzl", "xref")
 load("@rules_erlang//:erlang_bytecode2.bzl", "erlang_bytecode")
 load(
     "//:rabbitmq.bzl",
     "BROKER_VERSION_REQUIREMENTS_ANY",
-    "assert_suites",
     "rabbitmq_app",
 )
 
 # gazelle:erlang_generate_beam_files_macro false
 # gazelle:erlang_always_generate_test_beam_files
-# gazelle:erlang_skip_rules assert_suites,xref,plt,dialyze
+# gazelle:erlang_skip_rules assert_suites2,xref,plt,dialyze
 
 erlang_bytecode(
     name = "ebin_my_plugin_beam",
