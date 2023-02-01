@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_exchange_type_direct).
@@ -31,10 +31,10 @@ description() ->
 
 serialise_events() -> false.
 
-route(#exchange{name = Name},
+route(#exchange{name = Name, type = Type},
       #delivery{message = #basic_message{routing_keys = Routes}}) ->
-    case rabbit_feature_flags:is_enabled(direct_exchange_routing_v2, non_blocking) of
-        true ->
+    case {Type, rabbit_feature_flags:is_enabled(direct_exchange_routing_v2, non_blocking)} of
+        {direct, true} ->
             route_v2(Name, Routes);
         _ ->
             rabbit_router:match_routing_key(Name, Routes)

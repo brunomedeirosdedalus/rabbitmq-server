@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_direct).
@@ -33,7 +33,7 @@ boot() -> rabbit_sup:start_supervisor_child(
 -spec force_event_refresh(reference()) -> 'ok'.
 
 force_event_refresh(Ref) ->
-    [Pid ! {force_event_refresh, Ref} || Pid <- list()],
+    _ = [Pid ! {force_event_refresh, Ref} || Pid <- list()],
     ok.
 
 -spec list_local() -> [pid()].

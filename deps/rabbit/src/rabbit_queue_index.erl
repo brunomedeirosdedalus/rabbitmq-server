@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_queue_index).
@@ -333,8 +333,8 @@ recover(#resource{ virtual_host = VHost } = Name, Terms, MsgStoreRecovered,
 
 terminate(VHost, Terms, State = #qistate { dir = Dir }) ->
     {SegmentCounts, State1} = terminate(State),
-    rabbit_recovery_terms:store(VHost, filename:basename(Dir),
-                                [{segments, SegmentCounts} | Terms]),
+    _ = rabbit_recovery_terms:store(VHost, filename:basename(Dir),
+                                    [{segments, SegmentCounts} | Terms]),
     State1.
 
 -spec delete_and_terminate(qistate()) -> qistate().
@@ -549,7 +549,7 @@ start(VHost, DurableQueueNames) ->
                    sets:add_element(DirName, ValidDirectories)}
           end, {[], sets:new()}, DurableQueueNames),
     %% Any queue directory we've not been asked to recover is considered garbage
-    rabbit_file:recursive_delete(
+    _ = rabbit_file:recursive_delete(
       [DirName ||
         DirName <- all_queue_directory_names(VHost),
         not sets:is_element(filename:basename(DirName), DurableDirectories)]),
@@ -989,7 +989,7 @@ append_journal_to_segment(#segment { journal_entries = JEntries,
             %% might not be required here, but before we were doing a
             %% sparse_foldr, a lists:reverse/1 seems to be the correct
             %% thing to do for now.
-            file_handle_cache:append(Hdl, lists:reverse(array:to_list(EToSeg))),
+            _ = file_handle_cache:append(Hdl, lists:reverse(array:to_list(EToSeg))),
             ok = file_handle_cache:close(Hdl),
             Segment #segment { journal_entries    = array_new(),
                                entries_to_segment = array_new([]) }

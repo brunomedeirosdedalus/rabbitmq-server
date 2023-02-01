@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2018-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2018-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_maintenance).
@@ -92,7 +92,7 @@ drain() ->
     rabbit_log:warning("This node is being put into maintenance (drain) mode"),
     mark_as_being_drained(),
     rabbit_log:info("Marked this node as undergoing maintenance"),
-    suspend_all_client_listeners(),
+    _ = suspend_all_client_listeners(),
     rabbit_log:warning("Suspended all listeners and will no longer accept client connections"),
     {ok, NConnections} = close_all_client_connections(),
     rabbit_log:warning("Closed ~b local client connections", [NConnections]),
@@ -107,6 +107,11 @@ drain() ->
     transfer_leadership_of_quorum_queues(TransferCandidates),
     stop_local_quorum_queue_followers(),
 
+    case whereis(rabbit_stream_coordinator) of
+        undefined -> ok;
+        _Pid -> transfer_leadership_of_stream_coordinator(TransferCandidates)
+    end,
+
     %% allow plugins to react
     rabbit_event:notify(maintenance_draining, #{
         reason => <<"node is being put into maintenance">>
@@ -120,7 +125,7 @@ revive() ->
     rabbit_log:info("This node is being revived from maintenance (drain) mode"),
     revive_local_quorum_queue_replicas(),
     rabbit_log:info("Resumed all listeners and will accept client connections again"),
-    resume_all_client_listeners(),
+    _ = resume_all_client_listeners(),
     rabbit_log:info("Resumed all listeners and will accept client connections again"),
     unmark_as_being_drained(),
     rabbit_log:info("Marked this node as back from maintenance and ready to serve clients"),
@@ -129,12 +134,12 @@ revive() ->
     rabbit_event:notify(maintenance_revived, #{}),
 
     ok.
- 
+
 -spec mark_as_being_drained() -> boolean().
 mark_as_being_drained() ->
     rabbit_log:debug("Marking the node as undergoing maintenance"),
     set_maintenance_status_status(?DRAINING_STATUS).
- 
+
 -spec unmark_as_being_drained() -> boolean().
 unmark_as_being_drained() ->
     rabbit_log:debug("Unmarking the node as undergoing maintenance"),
@@ -161,8 +166,8 @@ set_maintenance_status_status(Status) ->
         {atomic, ok} -> true;
         _            -> false
     end.
- 
- 
+
+
 -spec is_being_drained_local_read(node()) -> boolean().
 is_being_drained_local_read(Node) ->
     Status = status_local_read(Node),
@@ -181,7 +186,7 @@ status_local_read(Node) ->
             Status;
         _   -> ?DEFAULT_STATUS
     end.
- 
+
 -spec status_consistent_read(node()) -> maintenance_status().
 status_consistent_read(Node) ->
     case mnesia:transaction(fun() -> mnesia:read(?TABLE, Node) end) of
@@ -191,15 +196,15 @@ status_consistent_read(Node) ->
         {atomic, _}  -> ?DEFAULT_STATUS;
         {aborted, _Reason} -> ?DEFAULT_STATUS
     end.
- 
+
  -spec filter_out_drained_nodes_local_read([node()]) -> [node()].
 filter_out_drained_nodes_local_read(Nodes) ->
     lists:filter(fun(N) -> not is_being_drained_local_read(N) end, Nodes).
- 
+
 -spec filter_out_drained_nodes_consistent_read([node()]) -> [node()].
 filter_out_drained_nodes_consistent_read(Nodes) ->
     lists:filter(fun(N) -> not is_being_drained_consistent_read(N) end, Nodes).
- 
+
 -spec suspend_all_client_listeners() -> rabbit_types:ok_or_error(any()).
  %% Pauses all listeners on the current node except for
  %% Erlang distribution (clustering and CLI tools).
@@ -293,6 +298,25 @@ transfer_leadership_of_classic_mirrored_queues(TransferCandidates) ->
      end || Q <- Queues],
     rabbit_log:info("Leadership transfer for local classic mirrored queues is complete").
 
+-spec transfer_leadership_of_stream_coordinator([node()]) -> ok.
+transfer_leadership_of_stream_coordinator([]) ->
+    rabbit_log:warning("Skipping leadership transfer of stream coordinator: no candidate "
+                       "(online, not under maintenance) nodes to transfer to!");
+transfer_leadership_of_stream_coordinator(TransferCandidates) ->
+    % try to transfer to the node with the lowest uptime; the assumption is that
+    % nodes are usually restarted in a rolling fashion, in a consistent order;
+    % therefore, the youngest node has already been restarted  or (if we are draining the first node)
+    % that it will be restarted last. either way, this way we limit the number of transfers
+    Uptimes = rabbit_misc:append_rpc_all_nodes(TransferCandidates, erlang, statistics, [wall_clock]),
+    Candidates = lists:zipwith(fun(N, {U, _}) -> {N, U}  end, TransferCandidates, Uptimes),
+    BestCandidate = element(1, hd(lists:keysort(2, Candidates))),
+    case rabbit_stream_coordinator:transfer_leadership([BestCandidate]) of
+        {ok, Node} ->
+            rabbit_log:info("Leadership transfer for stream coordinator completed. The new leader is ~p", [Node]);
+        Error ->
+            rabbit_log:warning("Skipping leadership transfer of stream coordinator: ~p", [Error])
+    end.
+
 -spec stop_local_quorum_queue_followers() -> ok.
 stop_local_quorum_queue_followers() ->
     Queues = rabbit_amqqueue:list_local_followers(),
@@ -359,7 +383,7 @@ revive_local_quorum_queue_replicas() ->
         end
      end || Q <- Queues],
     rabbit_log:info("Restart of local quorum queue replicas is complete").
- 
+
 %%
 %% Implementation
 %%
@@ -371,11 +395,11 @@ local_listener_fold_fun(Fun) ->
         (_, Acc) ->
             Acc
     end.
- 
+
 ok_or_first_error(ok, Acc) ->
     Acc;
 ok_or_first_error({error, _} = Err, _Acc) ->
     Err.
- 
+
 readable_candidate_list(Nodes) ->
     string:join(lists:map(fun rabbit_data_coercion:to_list/1, Nodes), ", ").

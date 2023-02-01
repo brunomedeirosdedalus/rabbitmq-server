@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module('Elixir.RabbitMQ.CLI.Ctl.Commands.ShovelStatusCommand').
@@ -101,8 +101,8 @@ fmt_ts({{YY, MM, DD}, {Hour, Min, Sec}}) ->
       io_lib:format("~4..0w-~2..0w-~2..0w ~2..0w:~2..0w:~2..0w",
                     [YY, MM, DD, Hour, Min, Sec])).
 
-fmt_status({'running' = St, Proplist}, Map) ->
-    maps:merge(Map#{state => St,
+fmt_status({'running', Proplist}, Map) ->
+    maps:merge(Map#{state => proplists:get_value(blocked_status, Proplist, running),
                     source_protocol => proplists:get_value(src_protocol, Proplist,
                                                            undefined),
                     source => proplists:get_value(src_uri, Proplist),

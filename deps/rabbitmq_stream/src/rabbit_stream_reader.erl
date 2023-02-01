@@ -9,7 +9,7 @@
 %% The Original Code is RabbitMQ.
 %%
 %% The Initial Developer of the Original Code is Pivotal Software, Inc.
-%% Copyright (c) 2020-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2020-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_stream_reader).
@@ -44,6 +44,7 @@
 -record(consumer,
         {configuration :: #consumer_configuration{},
          credit :: non_neg_integer(),
+         send_limit :: non_neg_integer(),
          log :: undefined | osiris_log:state(),
          last_listener_offset = undefined :: undefined | osiris:offset()}).
 -record(stream_connection_state,
@@ -81,12 +82,12 @@
          heartbeater :: any(),
          client_properties = #{} :: #{binary() => binary()},
          monitors = #{} :: #{reference() => stream()},
-         stats_timer :: undefined | reference(),
+         stats_timer :: undefined | rabbit_event:state(),
          resource_alarm :: boolean(),
          send_file_oct ::
              atomics:atomics_ref(), % number of bytes sent with send_file (for metrics)
          transport :: tcp | ssl,
-         proxy_socket :: undefined | ranch_proxy:proxy_socket(),
+         proxy_socket :: undefined | ranch_transport:socket(),
          correlation_id_sequence :: integer(),
          outstanding_requests :: #{integer() => term()},
          deliver_version :: rabbit_stream_core:command_version()}).
@@ -118,7 +119,6 @@
          ssl_key_exchange,
          ssl_cipher,
          ssl_hash,
-         protocol,
          user,
          vhost,
          protocol,
@@ -196,6 +196,9 @@ start_link(KeepaliveSup, Transport, Ref, Opts) ->
      proc_lib:spawn_link(?MODULE, init,
                          [[KeepaliveSup, Transport, Ref, Opts]])}.
 
+%% Because of gen_statem:enter_loop/4 usage inside init/1
+-dialyzer({no_behaviours, init/1}).
+
 init([KeepaliveSup,
       Transport,
       Ref,
@@ -253,7 +256,7 @@ init([KeepaliveSup,
                                          data =
                                              rabbit_stream_core:init(undefined)},
             Transport:setopts(RealSocket, [{active, once}]),
-            rabbit_alarm:register(self(), {?MODULE, resource_alarm, []}),
+            _ = rabbit_alarm:register(self(), {?MODULE, resource_alarm, []}),
             ConnectionNegotiationStepTimeout =
                 application:get_env(rabbitmq_stream,
                                     connection_negotiation_step_timeout,
@@ -485,7 +488,7 @@ handle_info(Msg,
                                              Connection,
                                              State,
                                              Data),
-            Transport:setopts(S, [{active, once}]),
+            setopts(Transport, S, [{active, once}]),
             #stream_connection{connection_step = NewConnectionStep} =
                 Connection1,
             rabbit_log_connection:debug("Transitioned from ~ts to ~ts",
@@ -547,11 +550,11 @@ invalid_transition(Transport, Socket, From, To) ->
     close_immediately(Transport, Socket),
     stop.
 
-resource_alarm(ConnectionPid, disk,
-               {_WasAlarmSetForNode,
-                IsThereAnyAlarmsForSameResourceInTheCluster, _Node}) ->
-    ConnectionPid
-    ! {resource_alarm, IsThereAnyAlarmsForSameResourceInTheCluster},
+-spec resource_alarm(pid(),
+                     rabbit_alarm:resource_alarm_source(),
+                     rabbit_alarm:resource_alert()) -> ok.
+resource_alarm(ConnectionPid, disk, {_, Conserve, _}) ->
+    ConnectionPid ! {resource_alarm, Conserve},
     ok;
 resource_alarm(_ConnectionPid, _Resource, _Alert) ->
     ok.
@@ -654,7 +657,7 @@ close(Transport,
       #stream_connection{socket = S, virtual_host = VirtualHost},
       #stream_connection_state{consumers = Consumers}) ->
     [begin
-         maybe_unregister_consumer(VirtualHost, Consumer,
+         _ = maybe_unregister_consumer(VirtualHost, Consumer,
                                    single_active_consumer(Properties)),
          case Log of
              undefined ->
@@ -705,12 +708,12 @@ open(info, {resource_alarm, IsThereAlarm},
             {false, EnoughCredits} ->
                 not EnoughCredits
         end,
-    rabbit_log_connection:debug("Connection ~tp had blocked status set to ~tp, new "
-                                "blocked status is now ~tp",
+    rabbit_log_connection:debug("Connection ~tp had blocked status set to ~tp, "
+                                "new blocked status is now ~tp",
                                 [ConnectionName, Blocked, NewBlockedState]),
     case {Blocked, NewBlockedState} of
         {true, false} ->
-            Transport:setopts(S, [{active, once}]),
+            setopts(Transport, S, [{active, once}]),
             ok = rabbit_heartbeat:resume_monitor(Heartbeater),
             rabbit_log_connection:debug("Unblocking connection ~tp",
                                         [ConnectionName]);
@@ -748,7 +751,7 @@ open(info, {OK, S, Data},
             stop;
         close_sent ->
             rabbit_log_connection:debug("Transitioned to close_sent"),
-            Transport:setopts(S, [{active, once}]),
+            setopts(Transport, S, [{active, once}]),
             {next_state, close_sent,
              StatemData#statem_data{connection = Connection1,
                                     connection_state = State1}};
@@ -758,7 +761,7 @@ open(info, {OK, S, Data},
                     true ->
                         case should_unblock(Connection, Configuration) of
                             true ->
-                                Transport:setopts(S, [{active, once}]),
+                                setopts(Transport, S, [{active, once}]),
                                 ok =
                                     rabbit_heartbeat:resume_monitor(Heartbeater),
                                 State1#stream_connection_state{blocked = false};
@@ -768,7 +771,7 @@ open(info, {OK, S, Data},
                     false ->
                         case has_credits(Credits) of
                             true ->
-                                Transport:setopts(S, [{active, once}]),
+                                setopts(Transport, S, [{active, once}]),
                                 State1;
                             false ->
                                 ok =
@@ -786,7 +789,8 @@ open(info,
                   connection = Connection0,
                   connection_state = ConnState0} =
          State) ->
-    rabbit_log:debug("Subscription ~tp instructed to become active: ~tp",
+    rabbit_log:debug("Subscription ~tp instructed to become active: "
+                     "~tp",
                      [SubId, Active]),
     #stream_connection_state{consumers = Consumers0} = ConnState0,
     {Connection1, ConnState1} =
@@ -846,14 +850,14 @@ open(info,
                        connection_state = ConnState1}};
 open(info, {Closed, Socket}, #statem_data{connection = Connection})
     when Closed =:= tcp_closed; Closed =:= ssl_closed ->
-    demonitor_all_streams(Connection),
+    _ = demonitor_all_streams(Connection),
     rabbit_log_connection:warning("Socket ~w closed [~w]",
                                   [Socket, self()]),
     stop;
 open(info, {Error, Socket, Reason},
      #statem_data{connection = Connection})
     when Error =:= tcp_error; Error =:= ssl_error ->
-    demonitor_all_streams(Connection),
+    _ = demonitor_all_streams(Connection),
     rabbit_log_connection:error("Socket error ~tp [~w] [~w]",
                                 [Reason, Socket, self()]),
     stop;
@@ -920,6 +924,14 @@ open(info, emit_stats,
          StatemData) ->
     Connection1 = emit_stats(Connection, State),
     {keep_state, StatemData#statem_data{connection = Connection1}};
+open(info, {shutdown, Explanation} = Reason,
+     #statem_data{connection = Connection}) ->
+    %% rabbitmq_management or rabbitmq_stream_management plugin
+    %% requests to close connection.
+    rabbit_log_connection:info("Forcing stream connection ~tp closing: ~tp",
+                               [self(), Explanation]),
+    _ = demonitor_all_streams(Connection),
+    {stop, Reason};
 open(info, Unknown, _StatemData) ->
     rabbit_log_connection:warning("Received unknown message ~tp in state ~ts",
                                   [Unknown, ?FUNCTION_NAME]),
@@ -939,13 +951,6 @@ open({call, From}, {publishers_info, Items},
      #statem_data{connection = Connection}) ->
     {keep_state_and_data,
      {reply, From, publishers_infos(Items, Connection)}};
-open({call, From}, {shutdown, Explanation},
-     #statem_data{connection = Connection}) ->
-    % likely closing call from the management plugin
-    rabbit_log_connection:info("Forcing stream connection ~tp closing: ~tp",
-                               [self(), Explanation]),
-    demonitor_all_streams(Connection),
-    {stop_and_reply, normal, {reply, From, ok}};
 open(cast,
      {queue_event, _, {osiris_written, _, undefined, CorrelationList}},
      #statem_data{transport = Transport,
@@ -988,7 +993,7 @@ open(cast,
             true ->
                 case should_unblock(Connection, Configuration) of
                     true ->
-                        Transport:setopts(S, [{active, once}]),
+                        setopts(Transport, S, [{active, once}]),
                         ok = rabbit_heartbeat:resume_monitor(Heartbeater),
                         State#stream_connection_state{blocked = false};
                     false ->
@@ -1035,7 +1040,7 @@ open(cast,
             true ->
                 case should_unblock(Connection, Configuration) of
                     true ->
-                        Transport:setopts(S, [{active, once}]),
+                        setopts(Transport, S, [{active, once}]),
                         ok = rabbit_heartbeat:resume_monitor(Heartbeater),
                         State#stream_connection_state{blocked = false};
                     false ->
@@ -1135,7 +1140,10 @@ open(cast, {force_event_refresh, Ref},
         rabbit_event:init_stats_timer(Connection,
                                       #stream_connection.stats_timer),
     Connection2 = ensure_stats_timer(Connection1),
-    {keep_state, StatemData#statem_data{connection = Connection2}}.
+    {keep_state, StatemData#statem_data{connection = Connection2}};
+open(cast, refresh_config, _StatemData) ->
+    %% tracing not supported
+    keep_state_and_data.
 
 close_sent(enter, _OldState,
            #statem_data{config =
@@ -1162,7 +1170,7 @@ close_sent(info, {tcp, S, Data},
         closing_done ->
             stop;
         _ ->
-            Transport:setopts(S, [{active, once}]),
+            setopts(Transport, S, [{active, once}]),
             {keep_state,
              StatemData#statem_data{connection = Connection1,
                                     connection_state = State1}}
@@ -1172,8 +1180,8 @@ close_sent(info, {tcp_closed, S}, _StatemData) ->
                                 [S, self()]),
     stop;
 close_sent(info, {tcp_error, S, Reason}, #statem_data{}) ->
-    rabbit_log_connection:error("Stream protocol connection socket error: ~tp [~w] "
-                                "[~w]",
+    rabbit_log_connection:error("Stream protocol connection socket error: ~tp "
+                                "[~w] [~w]",
                                 [Reason, S, self()]),
     stop;
 close_sent(info, {resource_alarm, IsThereAlarm},
@@ -1872,8 +1880,8 @@ handle_frame_post_auth(Transport,
                                                                              1),
                             {Connection, State};
                         false ->
-                            rabbit_log:debug("Creating subscription ~tp to ~tp, with offset specificat"
-                                             "ion ~tp, properties ~0p",
+                            rabbit_log:debug("Creating subscription ~tp to ~tp, with offset "
+                                             "specification ~tp, properties ~0p",
                                              [SubscriptionId,
                                               Stream,
                                               OffsetSpec,
@@ -1884,8 +1892,8 @@ handle_frame_post_auth(Transport,
                                   ConsumerName}
                             of
                                 {true, false, _} ->
-                                    rabbit_log:warning("Cannot create subcription ~tp, stream single active "
-                                                       "consumer feature flag is not enabled",
+                                    rabbit_log:warning("Cannot create subcription ~tp, stream single "
+                                                       "active consumer feature flag is not enabled",
                                                        [SubscriptionId]),
                                     response(Transport,
                                              Connection,
@@ -1955,10 +1963,12 @@ handle_frame_post_auth(Transport,
                                                                     Properties,
                                                                 active =
                                                                     Active},
+                                    SendLimit = Credit div 2,
                                     ConsumerState =
                                         #consumer{configuration =
                                                       ConsumerConfiguration,
                                                   log = Log,
+                                                  send_limit = SendLimit,
                                                   credit = Credit},
 
                                     Connection1 =
@@ -2080,7 +2090,8 @@ handle_frame_post_auth(_Transport,
         ok ->
             case lookup_leader(Stream, Connection) of
                 {error, Error} ->
-                    rabbit_log:warning("Could not find leader to store offset on ~tp: ~tp",
+                    rabbit_log:warning("Could not find leader to store offset on ~tp: "
+                                       "~tp",
                                        [Stream, Error]),
                     %% FIXME store offset is fire-and-forget, so no response even if error, change this?
                     {Connection, State};
@@ -2362,9 +2373,16 @@ handle_frame_post_auth(Transport,
                     end,
                     #{}, Streams),
 
-    Nodes =
+    Nodes0 =
         lists:sort(
             maps:keys(NodesMap)),
+    %% filter out nodes in maintenance
+    Nodes =
+        lists:filter(fun(N) ->
+                        rabbit_maintenance:is_being_drained_consistent_read(N)
+                        =:= false
+                     end,
+                     Nodes0),
     NodeEndpoints =
         lists:foldr(fun(Node, Acc) ->
                        PortFunction =
@@ -2486,7 +2504,8 @@ handle_frame_post_auth(Transport,
     end,
     case maps:take(CorrelationId, Requests0) of
         {{{subscription_id, SubscriptionId}, {extra, Extra}}, Rs} ->
-            rabbit_log:debug("Received consumer update response for subscription ~tp",
+            rabbit_log:debug("Received consumer update response for subscription "
+                             "~tp",
                              [SubscriptionId]),
             Consumers1 =
                 case Consumers of
@@ -2557,8 +2576,8 @@ handle_frame_post_auth(Transport,
                             Consumer2,
                         ConsumerOffset = osiris_log:next_offset(Log2),
 
-                        rabbit_log:debug("Subscription ~tp is now at offset ~tp with ~tp message(s) "
-                                         "distributed after subscription",
+                        rabbit_log:debug("Subscription ~tp is now at offset ~tp with ~tp "
+                                         "message(s) distributed after subscription",
                                          [SubscriptionId, ConsumerOffset,
                                           messages_consumed(ConsumerCounters)]),
 
@@ -2574,9 +2593,10 @@ handle_frame_post_auth(Transport,
                         case Extra of
                             [{stepping_down, true}] ->
                                 ConsumerName = consumer_name(Properties),
-                                rabbit_stream_sac_coordinator:activate_consumer(VirtualHost,
-                                                                                Stream,
-                                                                                ConsumerName);
+                                _ = rabbit_stream_sac_coordinator:activate_consumer(VirtualHost,
+                                                                                    Stream,
+                                                                                    ConsumerName),
+                                ok;
                             _ ->
                                 ok
                         end,
@@ -2745,7 +2765,8 @@ maybe_dispatch_on_subscription(Transport,
                                SubscriptionProperties,
                                SendFileOct,
                                false = _Sac) ->
-    rabbit_log:debug("Distributing existing messages to subscription ~tp",
+    rabbit_log:debug("Distributing existing messages to subscription "
+                     "~tp",
                      [SubscriptionId]),
     case send_chunks(DeliverVersion,
                      Transport,
@@ -2768,8 +2789,8 @@ maybe_dispatch_on_subscription(Transport,
             ConsumerOffset = osiris_log:next_offset(Log1),
             ConsumerOffsetLag = consumer_i(offset_lag, ConsumerState1),
 
-            rabbit_log:debug("Subscription ~tp is now at offset ~tp with ~tp message(s) "
-                             "distributed after subscription",
+            rabbit_log:debug("Subscription ~tp is now at offset ~tp with ~tp "
+                             "message(s) distributed after subscription",
                              [SubscriptionId, ConsumerOffset,
                               messages_consumed(ConsumerCounters1)]),
 
@@ -2794,9 +2815,9 @@ maybe_dispatch_on_subscription(_Transport,
                                SubscriptionProperties,
                                _SendFileOct,
                                true = _Sac) ->
-    rabbit_log:debug("No initial dispatch for subscription ~tp for now, "
-                     "waiting for consumer update response from client "
-                     "(single active consumer)",
+    rabbit_log:debug("No initial dispatch for subscription ~tp for "
+                     "now, waiting for consumer update response from "
+                     "client (single active consumer)",
                      [SubscriptionId]),
     #consumer{credit = Credit,
               configuration =
@@ -2835,8 +2856,12 @@ maybe_register_consumer(VirtualHost,
                                                         SubscriptionId),
     Active.
 
-maybe_send_consumer_update(_, Connection, _, _, false = _Sac, _) ->
-    Connection;
+%% NOTE: Never called with SAC = false, but adding an explicit type
+%% still doesn't convince dialyzer. Keeping this clause commented out
+%% instead of disabling some dialyzer checks for this function:
+%%
+%% maybe_send_consumer_update(_, Connection, _, _, false = _Sac, _) ->
+%%     Connection;
 maybe_send_consumer_update(Transport,
                            #stream_connection{socket = S,
                                               correlation_id_sequence =
@@ -2966,7 +2991,7 @@ clean_state_after_stream_deletion_or_failure(Stream,
         case stream_has_subscriptions(Stream, C0) of
             true ->
                 #{Stream := SubscriptionIds} = StreamSubscriptions,
-                [begin
+                _ = [begin
                      rabbit_stream_metrics:consumer_cancelled(self(),
                                                               stream_r(Stream,
                                                                        C0),
@@ -3084,8 +3109,8 @@ remove_subscription(SubscriptionId,
     rabbit_stream_metrics:consumer_cancelled(self(),
                                              stream_r(Stream, Connection2),
                                              SubscriptionId),
-    maybe_unregister_consumer(VirtualHost, Consumer,
-                              single_active_consumer(Consumer#consumer.configuration#consumer_configuration.properties)),
+    _ = maybe_unregister_consumer(VirtualHost, Consumer,
+                                  single_active_consumer(Consumer#consumer.configuration#consumer_configuration.properties)),
     {Connection2, State#stream_connection_state{consumers = Consumers1}}.
 
 maybe_clean_connection_from_stream(Stream,
@@ -3211,11 +3236,7 @@ send_file_callback(?VERSION_2,
     fun(#{chunk_id := FirstOffsetInChunk, num_entries := NumEntries},
         Size) ->
        FrameSize = 2 + 2 + 1 + 8 + Size,
-       CommittedChunkId =
-           case osiris_log:committed_offset(Log) of
-               undefined -> 0;
-               R -> R
-           end,
+       CommittedChunkId = osiris_log:committed_offset(Log),
        FrameBeginning =
            <<FrameSize:32,
              ?REQUEST:1,
@@ -3243,18 +3264,24 @@ send_chunks(DeliverVersion,
 
 send_chunks(_DeliverVersion,
             _Transport,
-            Consumer,
-            0,
+            #consumer{send_limit = SendLimit} = Consumer,
+            Credit,
             LastLstOffset,
-            _Counter) ->
+            _Counter) when Credit =< SendLimit ->
+    %% there are fewer credits than the credit limit so we won't enter
+    %% the send_chunks loop until we have more than the limit available.
+    %% Once we have that we are able to consume all credits all the way down
+    %% to zero
     {ok,
-     Consumer#consumer{credit = 0, last_listener_offset = LastLstOffset}};
+     Consumer#consumer{credit = Credit, last_listener_offset = LastLstOffset}};
 send_chunks(DeliverVersion,
             Transport,
-            #consumer{log = Log} = Consumer,
+            #consumer{configuration = #consumer_configuration{socket = Socket},
+                      log = Log} = Consumer,
             Credit,
             LastLstOffset,
             Counter) ->
+    setopts(Transport, Socket, [{nopush, true}]),
     send_chunks(DeliverVersion,
                 Transport,
                 Consumer,
@@ -3265,27 +3292,31 @@ send_chunks(DeliverVersion,
                 Counter).
 
 send_chunks(_DeliverVersion,
-            _Transport,
-            Consumer,
+            Transport,
+            #consumer{
+                      configuration = #consumer_configuration{socket = Socket}} =
+                Consumer,
             Log,
-            0 = _Credit,
+            0,
             LastLstOffset,
             _Retry,
             _Counter) ->
+    %% we have finished sending so need to uncork
+    setopts(Transport, Socket, [{nopush, false}]),
     {ok,
      Consumer#consumer{log = Log,
                        credit = 0,
                        last_listener_offset = LastLstOffset}};
 send_chunks(DeliverVersion,
             Transport,
-            #consumer{configuration = #consumer_configuration{socket = S}} =
+            #consumer{configuration = #consumer_configuration{socket = Socket}} =
                 Consumer,
             Log,
             Credit,
             LastLstOffset,
             Retry,
             Counter) ->
-    case osiris_log:send_file(S, Log,
+    case osiris_log:send_file(Socket, Log,
                               send_file_callback(DeliverVersion,
                                                  Transport,
                                                  Log,
@@ -3308,6 +3339,7 @@ send_chunks(DeliverVersion,
         {error, Reason} ->
             {error, Reason};
         {end_of_stream, Log1} ->
+            setopts(Transport, Socket, [{nopush, false}]),
             case Retry of
                 true ->
                     timer:sleep(1),
@@ -3536,23 +3568,18 @@ i(host, #stream_connection{host = Host}, _) ->
     Host;
 i(peer_host, #stream_connection{peer_host = PeerHost}, _) ->
     PeerHost;
-i(ssl, #stream_connection{socket = Socket, proxy_socket = ProxySock},
-  _) ->
-    rabbit_net:proxy_ssl_info(Socket, ProxySock) /= nossl;
-i(peer_cert_subject, S, _) ->
-    cert_info(fun rabbit_ssl:peer_cert_subject/1, S);
-i(peer_cert_issuer, S, _) ->
-    cert_info(fun rabbit_ssl:peer_cert_issuer/1, S);
-i(peer_cert_validity, S, _) ->
-    cert_info(fun rabbit_ssl:peer_cert_validity/1, S);
-i(ssl_protocol, S, _) ->
-    ssl_info(fun({P, _}) -> P end, S);
-i(ssl_key_exchange, S, _) ->
-    ssl_info(fun({_, {K, _, _}}) -> K end, S);
-i(ssl_cipher, S, _) ->
-    ssl_info(fun({_, {_, C, _}}) -> C end, S);
-i(ssl_hash, S, _) ->
-    ssl_info(fun({_, {_, _, H}}) -> H end, S);
+i(SSL, #stream_connection{socket = Sock, proxy_socket = ProxySock}, _)
+  when SSL =:= ssl;
+       SSL =:= ssl_protocol;
+       SSL =:= ssl_key_exchange;
+       SSL =:= ssl_cipher;
+       SSL =:= ssl_hash ->
+    rabbit_ssl:info(SSL, {Sock, ProxySock});
+i(Cert, #stream_connection{socket = Sock},_)
+  when Cert =:= peer_cert_issuer;
+       Cert =:= peer_cert_subject;
+       Cert =:= peer_cert_validity ->
+    rabbit_ssl:cert_info(Cert, Sock);
 i(channels, _, _) ->
     0;
 i(protocol, _, _) ->
@@ -3594,36 +3621,15 @@ i(_Unknown, _, _) ->
 send(Transport, Socket, Data) when is_atom(Transport) ->
     Transport:send(Socket, Data).
 
-cert_info(F, #stream_connection{socket = Sock}) ->
-    case rabbit_net:peercert(Sock) of
-        nossl ->
-            '';
-        {error, _} ->
-            '';
-        {ok, Cert} ->
-            list_to_binary(F(Cert))
-    end.
-
-ssl_info(F,
-         #stream_connection{socket = Sock, proxy_socket = ProxySock}) ->
-    case rabbit_net:proxy_ssl_info(Sock, ProxySock) of
-        nossl ->
-            '';
-        {error, _} ->
-            '';
-        {ok, Items} ->
-            P = proplists:get_value(protocol, Items),
-            #{cipher := C,
-              key_exchange := K,
-              mac := H} =
-                proplists:get_value(selected_cipher_suite, Items),
-            F({P, {K, C, H}})
-    end.
-
 get_chunk_selector(Properties) ->
     binary_to_atom(maps:get(<<"chunk_selector">>, Properties,
                             <<"user_data">>)).
 
-close_log(undefined) -> ok;
+close_log(undefined) ->
+    ok;
 close_log(Log) ->
     osiris_log:close(Log).
+
+setopts(Transport, Sock, Opts) ->
+    ok = Transport:setopts(Sock, Opts).
+

@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_binding).
@@ -11,8 +11,8 @@
 
 -export([recover/0, recover/2, exists/1, add/2, add/3, remove/1, remove/2, remove/3, remove/4]).
 -export([list/1, list_for_source/1, list_for_destination/1,
-         list_for_source_and_destination/2, list_explicit/0,
-         list_between/2, has_any_between/2]).
+         list_for_source_and_destination/2, list_for_source_and_destination/3,
+         list_explicit/0, list_between/2, has_any_between/2]).
 -export([new_deletions/0, combine_deletions/2, add_deletion/3,
          process_deletions/2, binding_action/3]).
 -export([info_keys/0, info/1, info/2, info_all/1, info_all/2, info_all/4]).
@@ -37,11 +37,12 @@
                          {'resources_missing',
                           [{'not_found', (rabbit_types:binding_source() |
                                           rabbit_types:binding_destination())} |
-                           {'absent', amqqueue:amqqueue()}]}).
+                           {'absent', amqqueue:amqqueue(), Reason :: term()}]}).
 
 -type bind_ok_or_error() :: 'ok' | bind_errors() |
-                            rabbit_types:error(
-                              {'binding_invalid', string(), [any()]}).
+                            rabbit_types:error({'binding_invalid', string(), [any()]}) |
+                            %% inner_fun() result
+                            rabbit_types:error(rabbit_types:amqp_error()).
 -type bind_res() :: bind_ok_or_error() | rabbit_misc:thunk(bind_ok_or_error()).
 -type inner_fun() ::
         fun((rabbit_types:exchange(),
@@ -79,8 +80,8 @@ new(Src, RoutingKey, Dst, Arguments) ->
 recover() ->
     rabbit_misc:execute_mnesia_transaction(
       fun () ->
-              mnesia:lock({table, rabbit_durable_route}, read),
-              mnesia:lock({table, rabbit_semi_durable_route}, write),
+              _ = mnesia:lock({table, rabbit_durable_route}, read),
+              _ = mnesia:lock({table, rabbit_semi_durable_route}, write),
               Routes = rabbit_misc:dirty_read_all(rabbit_durable_route),
               Fun = fun(Route) ->
                             mnesia:dirty_write(rabbit_semi_durable_route, Route)
@@ -252,26 +253,18 @@ list(VHostPath) ->
 list_for_source(?DEFAULT_EXCHANGE(VHostPath)) ->
     implicit_bindings(VHostPath);
 list_for_source(SrcName) ->
-    mnesia:async_dirty(
-      fun() ->
-              Route = #route{binding = #binding{source = SrcName, _ = '_'}},
-              [B || #route{binding = B}
-                        <- mnesia:match_object(rabbit_route, Route, read)]
-      end).
+    Route = #route{binding = #binding{source = SrcName, _ = '_'}},
+    Fun = list_for_route(Route, false),
+    mnesia:async_dirty(Fun).
 
 -spec list_for_destination
         (rabbit_types:binding_destination()) -> bindings().
 
 list_for_destination(DstName = #resource{}) ->
-    ExplicitBindings = mnesia:async_dirty(
-                         fun() ->
-                                 Route = #route{binding = #binding{destination = DstName,
-                                                                   _ = '_'}},
-                                 [reverse_binding(B) ||
-                                  #reverse_route{reverse_binding = B} <-
-                                  mnesia:match_object(rabbit_reverse_route,
-                                                      reverse_route(Route), read)]
-                         end),
+    Route = #route{binding = #binding{destination = DstName,
+                                      _ = '_'}},
+    Fun = list_for_route(Route, true),
+    ExplicitBindings = mnesia:async_dirty(Fun),
     implicit_for_destination(DstName) ++ ExplicitBindings.
 
 -spec list_between(
@@ -315,27 +308,40 @@ implicit_for_destination(DstQueue = #resource{kind = queue,
 implicit_for_destination(_) ->
     [].
 
--spec list_for_source_and_destination
-        (rabbit_types:binding_source(), rabbit_types:binding_destination()) ->
-                                                bindings().
+-spec list_for_source_and_destination(rabbit_types:binding_source(), rabbit_types:binding_destination()) ->
+    bindings().
+list_for_source_and_destination(SrcName, DstName) ->
+    list_for_source_and_destination(SrcName, DstName, false).
 
+-spec list_for_source_and_destination(rabbit_types:binding_source(), rabbit_types:binding_destination(), boolean()) ->
+    bindings().
 list_for_source_and_destination(?DEFAULT_EXCHANGE(VHostPath),
                                 #resource{kind = queue,
                                           virtual_host = VHostPath,
-                                          name = QName} = DstQueue) ->
+                                          name = QName} = DstQueue,
+                                _Reverse) ->
     [#binding{source = ?DEFAULT_EXCHANGE(VHostPath),
               destination = DstQueue,
               key = QName,
               args = []}];
-list_for_source_and_destination(SrcName, DstName) ->
-    mnesia:async_dirty(
-      fun() ->
-              Route = #route{binding = #binding{source      = SrcName,
-                                                destination = DstName,
-                                                _           = '_'}},
-              [B || #route{binding = B} <- mnesia:match_object(rabbit_route,
-                                                               Route, read)]
-      end).
+list_for_source_and_destination(SrcName, DstName, Reverse) ->
+    Route = #route{binding = #binding{source      = SrcName,
+                                      destination = DstName,
+                                      _           = '_'}},
+    Fun = list_for_route(Route, Reverse),
+    mnesia:async_dirty(Fun).
+
+list_for_route(Route, false) ->
+    fun() ->
+            [B || #route{binding = B} <- mnesia:match_object(rabbit_route, Route, read)]
+    end;
+list_for_route(Route, true) ->
+    fun() ->
+            [reverse_binding(B) ||
+             #reverse_route{reverse_binding = B} <-
+             mnesia:match_object(rabbit_reverse_route,
+                                 reverse_route(Route), read)]
+    end.
 
 -spec info_keys() -> rabbit_types:info_keys().
 
@@ -544,7 +550,7 @@ remove_routes(Routes, ShouldIndexTable) ->
         R <- SemiDurableRoutes],
     [ok = sync_route(R, false, false, ShouldIndexTable, fun delete/3) ||
         R <- RamOnlyRoutes],
-    case ShouldIndexTable of
+    _ = case ShouldIndexTable of
         B when is_boolean(B) ->
             ok;
         undefined ->
@@ -602,8 +608,9 @@ remove_for_destination(DstName, OnlyDurable, Fun) ->
 lock_resource(Name) -> lock_resource(Name, write).
 
 lock_resource(Name, LockKind) ->
-    mnesia:lock({global, Name, mnesia:table_info(rabbit_route, where_to_write)},
-                LockKind).
+    _ = mnesia:lock({global, Name, mnesia:table_info(rabbit_route, where_to_write)},
+                LockKind),
+    ok.
 
 %% Requires that its input binding list is sorted in exchange-name
 %% order, so that the grouping of bindings (for passing to
@@ -738,7 +745,8 @@ process_deletions(Deletions, ActingUser) ->
 del_notify(Bs, ActingUser) -> [rabbit_event:notify(
                                binding_deleted,
                                info(B) ++ [{user_who_performed_action, ActingUser}])
-                             || B <- Bs].
+                             || B <- Bs],
+                              ok.
 
 x_callback(Serial, X, F, Bs) ->
     ok = rabbit_exchange:callback(X, F, Serial, [X, Bs]).

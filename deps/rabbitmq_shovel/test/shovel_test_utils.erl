@@ -2,14 +2,15 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(shovel_test_utils).
 
 -include_lib("common_test/include/ct.hrl").
 -export([set_param/3, set_param_nowait/3, await_shovel/2, await_shovel1/2,
-         shovels_from_status/0, await/1, await/2, clear_param/2]).
+         shovels_from_status/0, get_shovel_status/2,
+         await/1, await/2, clear_param/2]).
 
 make_uri(Config) ->
     Hostname = ?config(rmq_hostname, Config),
@@ -38,6 +39,17 @@ await_shovel1(_Config, Name) ->
 shovels_from_status() ->
     S = rabbit_shovel_status:status(),
     [N || {{<<"/">>, N}, dynamic, {running, _}, _} <- S].
+
+get_shovel_status(Config, Name) ->
+    S = rabbit_ct_broker_helpers:rpc(
+          Config, 0, rabbit_shovel_status, lookup, [{<<"/">>, Name}]),
+    case S of
+        not_found ->
+            not_found;
+        _ ->
+            {Status, Info} = proplists:get_value(info, S),
+            proplists:get_value(blocked_status, Info, Status)
+    end.
 
 await(Pred) ->
     case Pred() of

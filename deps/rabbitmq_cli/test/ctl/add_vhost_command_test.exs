@@ -63,6 +63,7 @@ defmodule AddVhostCommandTest do
     assert match?({:badrpc, _}, @command.run(["na"], opts))
   end
 
+  @tag vhost: @vhost
   test "run: adding the same host twice is idempotent", context do
     add_vhost(context[:vhost])
 
@@ -74,5 +75,13 @@ defmodule AddVhostCommandTest do
   test "banner", context do
     assert @command.banner([context[:vhost]], context[:opts]) =~
              ~r/Adding vhost \"#{context[:vhost]}\" \.\.\./
+  end
+
+  @tag vhost: @vhost
+  test "run: vhost tags are conformed to a list", context do
+    opts = Map.merge(context[:opts], %{description: "My vhost", tags: "my_tag"})
+    assert @command.run([context[:vhost]], opts) == :ok
+    record = list_vhosts() |> Enum.find(fn record -> record[:name] == context[:vhost] end)
+    assert record[:tags] == [:my_tag]
   end
 end

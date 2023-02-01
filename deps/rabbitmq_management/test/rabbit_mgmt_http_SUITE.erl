@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2016-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2016-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_mgmt_http_SUITE).
@@ -18,6 +18,7 @@
                                 assert_keys/2, assert_no_keys/2,
                                 http_get/2, http_get/3, http_get/5,
                                 http_get_no_auth/3,
+                                http_get_no_decode/5,
                                 http_put/4, http_put/6,
                                 http_post/4, http_post/6,
                                 http_upload_raw/8,
@@ -64,6 +65,7 @@ all_tests() -> [
     users_legacy_administrator_test,
     adding_a_user_with_password_test,
     adding_a_user_with_password_hash_test,
+    adding_a_user_with_generated_password_hash_test,
     adding_a_user_with_permissions_in_single_operation_test,
     adding_a_user_without_tags_fails_test,
     adding_a_user_without_password_or_hash_test,
@@ -98,6 +100,7 @@ all_tests() -> [
     definitions_remove_things_test,
     definitions_server_named_queue_test,
     definitions_with_charset_test,
+    definitions_default_queue_type_test,
     long_definitions_test,
     long_definitions_multipart_test,
     aliveness_test,
@@ -145,7 +148,8 @@ all_tests() -> [
     csp_headers_test,
     auth_attempts_test,
     user_limits_list_test,
-    user_limit_set_test
+    user_limit_set_test,
+    config_environment_test
 ].
 
 %% -------------------------------------------------------------------
@@ -257,6 +261,10 @@ end_per_testcase0(permissions_vhost_test, Config) ->
     rabbit_ct_broker_helpers:delete_vhost(Config, <<"myvhost2">>),
     rabbit_ct_broker_helpers:delete_user(Config, <<"myuser1">>),
     rabbit_ct_broker_helpers:delete_user(Config, <<"myuser2">>),
+    Config;
+end_per_testcase0(config_environment_test, Config) ->
+    rabbit_ct_broker_helpers:rpc(Config, 0, application, unset_env,
+                                 [rabbit, config_environment_test_env]),
     Config;
 end_per_testcase0(_, Config) -> Config.
 
@@ -575,6 +583,17 @@ adding_a_user_with_password_hash_test(Config) ->
                                        {password_hash, <<"2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b">>}],
              [?CREATED, ?NO_CONTENT]),
     http_delete(Config, "/users/user11", ?NO_CONTENT).
+
+adding_a_user_with_generated_password_hash_test(Config) ->
+    #{ok := HashedPassword} = http_get(Config, "/auth/hash_password/some_password"),
+
+    http_put(Config, "/users/user12", [{tags, <<"administrator">>},
+                                       {password_hash, HashedPassword}],
+             [?CREATED, ?NO_CONTENT]),
+    % If the get succeeded, the hashed password generation is correct
+    User = http_get(Config, "/users/user12", "user12", "some_password", ?OK),
+    ?assertEqual(maps:get(password_hash, User), HashedPassword),
+    http_delete(Config, "/users/user12", ?NO_CONTENT).
 
 adding_a_user_with_permissions_in_single_operation_test(Config) ->
     QArgs = #{},
@@ -1667,10 +1686,33 @@ long_definitions_vhosts(long_definitions_multipart_test) ->
     [#{name => <<"long_definitions_test-", Bin/binary, (integer_to_binary(N))/binary>>} ||
      N <- lists:seq(1, 16)].
 
+defs_default_queue_type_vhost(Config, QueueType) ->
+    register_parameters_and_policy_validator(Config),
+
+    %% Create a test vhost
+    http_put(Config, "/vhosts/test-vhost", #{defaultqueuetype => QueueType}, {group, '2xx'}),
+    PermArgs = [{configure, <<".*">>}, {write, <<".*">>}, {read, <<".*">>}],
+    http_put(Config, "/permissions/test-vhost/guest", PermArgs, {group, '2xx'}),
+
+    %% Import queue definition without an explicit queue type
+    http_post(Config, "/definitions/test-vhost",
+              #{queues => [#{name => <<"test-queue">>, durable => true}]},
+              {group, '2xx'}),
+
+    %% And check whether it was indeed created with the default type
+    Q = http_get(Config, "/queues/test-vhost/test-queue", ?OK),
+    ?assertEqual(QueueType, maps:get(type, Q)),
+
+    %% Remove the test vhost
+    http_delete(Config, "/vhosts/test-vhost", {group, '2xx'}),
+    ok.
+
+definitions_default_queue_type_test(Config) ->
+    defs_default_queue_type_vhost(Config, <<"classic">>),
+    defs_default_queue_type_vhost(Config, <<"quorum">>).
+
 defs_vhost(Config, Key, URI, CreateMethod, Args) ->
     Rep1 = fun (S, S2) -> re:replace(S, "<vhost>", S2, [{return, list}]) end,
-    ReplaceVHostInArgs = fun(M, V2) -> maps:map(fun(vhost, _) -> V2;
-        (_, V1)    -> V1 end, M) end,
 
     %% Create test vhost
     http_put(Config, "/vhosts/test", none, {group, '2xx'}),
@@ -1678,41 +1720,49 @@ defs_vhost(Config, Key, URI, CreateMethod, Args) ->
     http_put(Config, "/permissions/test/guest", PermArgs, {group, '2xx'}),
 
     %% Test against default vhost
-    defs_vhost(Config, Key, URI, Rep1, "%2F", "test", CreateMethod,
-               ReplaceVHostInArgs(Args, <<"/">>), ReplaceVHostInArgs(Args, <<"test">>),
+    defs_vhost(Config, Key, URI, Rep1, "%2F", "test", CreateMethod, Args,
                fun(URI2) -> http_delete(Config, URI2, {group, '2xx'}) end),
 
     %% Test against test vhost
-    defs_vhost(Config, Key, URI, Rep1, "test", "%2F", CreateMethod,
-               ReplaceVHostInArgs(Args, <<"test">>), ReplaceVHostInArgs(Args, <<"/">>),
+    defs_vhost(Config, Key, URI, Rep1, "test", "%2F", CreateMethod, Args,
                fun(URI2) -> http_delete(Config, URI2, {group, '2xx'}) end),
 
     %% Remove test vhost
     http_delete(Config, "/vhosts/test", {group, '2xx'}).
 
-
-defs_vhost(Config, Key, URI0, Rep1, VHost1, VHost2, CreateMethod, Args1, Args2,
+defs_vhost(Config, Key, URI0, Rep1, VHost1, VHost2, CreateMethod, Args,
            DeleteFun) ->
     %% Create the item
-    URI2 = create(Config, CreateMethod, Rep1(URI0, VHost1), Args1),
+    URI2 = create(Config, CreateMethod, Rep1(URI0, VHost1), Args),
+
     %% Make sure it ends up in definitions
     Definitions = http_get(Config, "/definitions/" ++ VHost1, ?OK),
-    true = lists:any(fun(I) -> test_item(Args1, I) end, maps:get(Key, Definitions)),
+    true = lists:any(fun(I) -> test_item(Args, I) end, maps:get(Key, Definitions)),
+
+    %% `vhost` is implied when importing/exporting for a single
+    %% virtual host, let's make sure that it doesn't accidentally
+    %% appear in the exported definitions. This can (and did) cause a
+    %% confusion about which part of the request to use as the source
+    %% for the vhost name.
+    case [ I || #{vhost := _} = I <- maps:get(Key, Definitions)] of
+        [] -> ok;
+        WithVHost -> error({vhost_included_in, Key, WithVHost})
+    end,
 
     %% Make sure it is not in the other vhost
     Definitions0 = http_get(Config, "/definitions/" ++ VHost2, ?OK),
-    false = lists:any(fun(I) -> test_item(Args2, I) end, maps:get(Key, Definitions0)),
+    false = lists:any(fun(I) -> test_item(Args, I) end, maps:get(Key, Definitions0)),
 
     %% Post the definitions back
     http_post(Config, "/definitions/" ++ VHost2, Definitions, {group, '2xx'}),
 
     %% Make sure it is now in the other vhost
     Definitions1 = http_get(Config, "/definitions/" ++ VHost2, ?OK),
-    true = lists:any(fun(I) -> test_item(Args2, I) end, maps:get(Key, Definitions1)),
+    true = lists:any(fun(I) -> test_item(Args, I) end, maps:get(Key, Definitions1)),
 
     %% Delete it
     DeleteFun(URI2),
-    URI3 = create(Config, CreateMethod, Rep1(URI0, VHost2), Args2),
+    URI3 = create(Config, CreateMethod, Rep1(URI0, VHost2), Args),
     DeleteFun(URI3),
     passed.
 
@@ -1731,15 +1781,13 @@ definitions_vhost_test(Config) ->
     defs_vhost(Config, bindings, "/bindings/<vhost>/e/amq.direct/e/amq.fanout", post,
                #{routing_key => <<"routing">>, arguments => #{}}),
     defs_vhost(Config, policies, "/policies/<vhost>/my-policy", put,
-               #{vhost      => vhost,
-                 name       => <<"my-policy">>,
+               #{name       => <<"my-policy">>,
                  pattern    => <<".*">>,
                  definition => #{testpos => [1, 2, 3]},
                  priority   => 1}),
 
     defs_vhost(Config, parameters, "/parameters/vhost-limits/<vhost>/limits", put,
-               #{vhost      => vhost,
-                 name       => <<"limits">>,
+               #{name       => <<"limits">>,
                  component  => <<"vhost-limits">>,
                  value      => #{ 'max-connections' => 100 }}),
     Upload =
@@ -2905,6 +2953,7 @@ extensions_test(Config) ->
     [#{javascript := <<"dispatcher.js">>}] = http_get(Config, "/extensions", ?OK),
     passed.
 
+
 cors_test(Config) ->
     %% With CORS disabled. No header should be received.
     R = req(Config, get, "/overview", [auth_header("guest", "guest")]),
@@ -3429,6 +3478,23 @@ auth_attempts_test(Config) ->
     ?assertEqual(0, maps:get(auth_attempts_failed, Amqp091_3)),
 
     passed.
+
+
+config_environment_test(Config) ->
+    rabbit_ct_broker_helpers:rpc(Config, 0, application, set_env,
+                                 [rabbitmq_management,
+                                  config_environment_test_env,
+                                  config_environment_test_value]),
+    ResultString = http_get_no_decode(Config, "/config/effective",
+                                      "guest", "guest", ?OK),
+    CleanString = re:replace(ResultString, "\\s+", "", [global,{return,list}]),
+    {ok, Tokens, _} = erl_scan:string(CleanString++"."),
+    {ok, AbsForm} = erl_parse:parse_exprs(Tokens),
+    {value, EnvList, _} = erl_eval:exprs(AbsForm, erl_eval:new_bindings()),
+    V = proplists:get_value(config_environment_test_env,
+                            proplists:get_value(rabbitmq_management, EnvList)),
+    ?assertEqual(config_environment_test_value, V).
+
 
 %% -------------------------------------------------------------------
 %% Helpers.

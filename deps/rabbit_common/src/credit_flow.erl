@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(credit_flow).
@@ -51,7 +51,7 @@
             Val       -> Val
         end).
 
--export([send/1, send/2, ack/1, ack/2, handle_bump_msg/1, blocked/0, state/0]).
+-export([send/1, send/2, ack/1, ack/2, handle_bump_msg/1, blocked/0, state/0, state_delayed/1]).
 -export([peer_down/1]).
 -export([block/1, unblock/1]).
 
@@ -88,9 +88,8 @@
         end).
 
 %% If current process was blocked by credit flow in the last
-%% STATE_CHANGE_INTERVAL milliseconds, state/0 will report it as "in
-%% flow".
--define(STATE_CHANGE_INTERVAL, 1000000).
+%% STATE_CHANGE_INTERVAL microseconds, state/0 will report it as "in flow".
+-define(STATE_CHANGE_INTERVAL, 1_000_000).
 
 -ifdef(CREDIT_FLOW_TRACING).
 -define(TRACE_BLOCKED(SELF, FROM), rabbit_event:notify(credit_flow_blocked,
@@ -156,20 +155,25 @@ blocked() -> case get(credit_blocked) of
                  _         -> true
              end.
 
+-spec state() -> running | flow.
 state() -> case blocked() of
                true  -> flow;
-               false -> case get(credit_blocked_at) of
-                            undefined -> running;
-                            B         -> Now = erlang:monotonic_time(),
-                                         Diff = erlang:convert_time_unit(Now - B,
-                                                                              native,
-                                                                              micro_seconds),
-                                         case Diff < ?STATE_CHANGE_INTERVAL of
-                                             true  -> flow;
-                                             false -> running
-                                         end
-                        end
+               false -> state_delayed(get(credit_blocked_at))
            end.
+
+-spec state_delayed(integer() | undefined) -> running | flow.
+state_delayed(BlockedAt) ->
+    case BlockedAt of
+        undefined -> running;
+        B         -> Now = erlang:monotonic_time(),
+                     Diff = erlang:convert_time_unit(Now - B,
+                                                     native,
+                                                     micro_seconds),
+                     case Diff < ?STATE_CHANGE_INTERVAL of
+                         true  -> flow;
+                         false -> running
+                     end
+    end.
 
 peer_down(Peer) ->
     %% In theory we could also remove it from credit_deferred here, but it

@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_peer_discovery).
@@ -84,7 +84,7 @@ log_configured_backend() ->
 
 maybe_init() ->
     Backend = backend(),
-    code:ensure_loaded(Backend),
+    _ = code:ensure_loaded(Backend),
     case erlang:function_exported(Backend, init, 0) of
         true  ->
             rabbit_log:debug("Peer discovery backend supports initialisation"),

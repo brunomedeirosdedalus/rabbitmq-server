@@ -22,16 +22,16 @@ concurrency:
   cancel-in-progress: true
 jobs:
   selenimum:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
         erlang_version:
-        - "25.1"
+        - "25.2"
         browser:
         - chrome
         include:
-        - erlang_version: "25.1"
+        - erlang_version: "25.2"
           elixir_version: 1.13.4
     env:
       SELENIUM_DIR: deps/rabbitmq_management/selenium
@@ -47,7 +47,7 @@ jobs:
         elixir-version: ${{ matrix.elixir_version }}
 
     - name: Mount Bazel Cache
-      uses: actions/cache@v3.0.11
+      uses: actions/cache@v3.2.4
       with:
         path: "/home/runner/repo-cache/"
         key: repo-cache
@@ -91,11 +91,11 @@ jobs:
 
     - name: Run Suites
       run: |
-        ${SELENIUM_DIR}/run-suites.sh
+        RABBITMQ_DOCKER_IMAGE=bazel/packaging/docker-image:rabbitmq ${SELENIUM_DIR}/run-suites.sh
 
     - name: Upload Test Artifacts
       if: always()
-      uses: actions/upload-artifact@v3.1.1
+      uses: actions/upload-artifact@v3.1.2
       with:
         name: test-artifacts-${{ matrix.browser }}-${{ matrix.erlang_version }}
         path: |

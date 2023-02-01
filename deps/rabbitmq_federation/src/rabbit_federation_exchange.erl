@@ -2,22 +2,21 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 %% TODO rename this
 -module(rabbit_federation_exchange).
 
+-include_lib("amqp_client/include/amqp_client.hrl").
+
 -rabbit_boot_step({?MODULE,
                    [{description, "federation exchange decorator"},
                     {mfa, {rabbit_registry, register,
                            [exchange_decorator, <<"federation">>, ?MODULE]}},
-                    {requires, rabbit_registry},
                     {cleanup, {rabbit_registry, unregister,
                                [exchange_decorator, <<"federation">>]}},
-                    {enables, recovery}]}).
-
--include_lib("amqp_client/include/amqp_client.hrl").
+                    {requires, [rabbit_registry, recovery]}]}).
 
 -behaviour(rabbit_exchange_decorator).
 
@@ -50,7 +49,7 @@ add_binding(transaction, _X, _B) ->
     ok;
 add_binding(Serial, X = #exchange{name = XName}, B) ->
     case federate(X) of
-        true  -> rabbit_federation_exchange_link:add_binding(Serial, XName, B),
+        true  -> _ = rabbit_federation_exchange_link:add_binding(Serial, XName, B),
                  ok;
         false -> ok
     end.
@@ -59,7 +58,7 @@ remove_bindings(transaction, _X, _Bs) ->
     ok;
 remove_bindings(Serial, X = #exchange{name = XName}, Bs) ->
     case federate(X) of
-        true  -> rabbit_federation_exchange_link:remove_bindings(Serial, XName, Bs),
+        true  -> _ = rabbit_federation_exchange_link:remove_bindings(Serial, XName, Bs),
                  ok;
         false -> ok
     end.

@@ -2,11 +2,11 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2018-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2018-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 %% @author The RabbitMQ team
-%% @copyright 2018-2022 VMware, Inc. or its affiliates.
+%% @copyright 2018-2023 VMware, Inc. or its affiliates.
 %%
 %% @doc
 %% This module exposes the API of the {@link rabbit_feature_flags}
@@ -19,6 +19,10 @@
 %% rabbit_feature_flags} to generate the real registry.
 
 -module(rabbit_ff_registry).
+
+-include_lib("kernel/include/logger.hrl").
+
+-include_lib("rabbit_common/include/logging.hrl").
 
 -export([get/1,
          list/1,
@@ -70,7 +74,7 @@
 %% @returns the properties of the specified feature flag.
 
 get(FeatureName) ->
-    rabbit_ff_registry_factory:initialize_registry(),
+    _ = rabbit_ff_registry_factory:initialize_registry(),
     ?convince_dialyzer(?MODULE:get(FeatureName), undefined, #{}).
 
 -spec list(all | enabled | disabled) -> rabbit_feature_flags:feature_flags().
@@ -85,7 +89,7 @@ get(FeatureName) ->
 %% @returns A map of selected feature flags.
 
 list(Which) ->
-    rabbit_ff_registry_factory:initialize_registry(),
+    _ = rabbit_ff_registry_factory:initialize_registry(),
     ?convince_dialyzer(?MODULE:list(Which), #{}, #{}).
 
 -spec states() -> rabbit_feature_flags:feature_states().
@@ -98,7 +102,7 @@ list(Which) ->
 %% @returns A map of feature flag states.
 
 states() ->
-    rabbit_ff_registry_factory:initialize_registry(),
+    _ = rabbit_ff_registry_factory:initialize_registry(),
     ?convince_dialyzer(?MODULE:states(), #{}, #{}).
 
 -spec is_supported(rabbit_feature_flags:feature_name()) -> boolean().
@@ -113,7 +117,7 @@ states() ->
 %%   otherwise.
 
 is_supported(FeatureName) ->
-    rabbit_ff_registry_factory:initialize_registry(),
+    _ = rabbit_ff_registry_factory:initialize_registry(),
     ?convince_dialyzer(?MODULE:is_supported(FeatureName), false, true).
 
 -spec is_enabled(rabbit_feature_flags:feature_name()) -> boolean() | state_changing.
@@ -128,7 +132,7 @@ is_supported(FeatureName) ->
 %%   its state is transient, or `false' otherwise.
 
 is_enabled(FeatureName) ->
-    rabbit_ff_registry_factory:initialize_registry(),
+    _ = rabbit_ff_registry_factory:initialize_registry(),
     ?convince_dialyzer(?MODULE:is_enabled(FeatureName), false, true).
 
 -spec is_registry_initialized() -> boolean().
@@ -165,9 +169,11 @@ is_registry_written_to_disk() ->
 -spec inventory() -> rabbit_feature_flags:inventory().
 
 inventory() ->
-    #{applications => [],
-      feature_flags => #{},
-      states => #{}}.
+    _ = rabbit_ff_registry_factory:initialize_registry(),
+    Inventory = #{applications => [],
+                  feature_flags => #{},
+                  states => #{}},
+    ?convince_dialyzer(?MODULE:inventory(), Inventory, Inventory).
 
 always_return_true() ->
     %% This function is here to trick Dialyzer. We want some functions
@@ -192,9 +198,10 @@ always_return_false() ->
 
 -ifdef(TEST).
 on_load() ->
-     _ = (catch rabbit_log_feature_flags:debug(
+     _ = (catch ?LOG_DEBUG(
                   "Feature flags: Loading initial (uninitialized) registry "
                   "module (~tp)",
-                  [self()])),
+                  [self()],
+                  #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS})),
     ok.
 -endif.

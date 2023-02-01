@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_writer).
@@ -58,13 +58,13 @@
     %% data pending delivery (between socket
     %% flushes)
     pending,
-    %% defines how ofter gc will be executed
+    %% defines how often gc will be executed
     writer_gc_threshold
 }).
 
 -define(HIBERNATE_AFTER, 5000).
 %% 1GB
--define(DEFAULT_GC_THRESHOLD, 1000000000).
+-define(DEFAULT_GC_THRESHOLD, 1_000_000_000).
 
 %%---------------------------------------------------------------------------
 

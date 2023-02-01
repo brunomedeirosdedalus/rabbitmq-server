@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2011-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2011-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(backing_queue_SUITE).
@@ -1616,12 +1616,7 @@ wait_for_confirms(Unconfirmed) ->
         true  -> ok;
         false ->
             receive
-                {'$gen_cast',
-                 {queue_event, _QName, {confirm, Confirmed, _}}} ->
-                    wait_for_confirms(
-                      sets:subtract(
-                        Unconfirmed, sets:from_list(Confirmed)));
-                {'$gen_cast', {confirm, Confirmed, _}} ->
+                {'$gen_cast', {queue_event, _QName, {confirm, Confirmed, _}}} ->
                     wait_for_confirms(
                       sets:subtract(
                         Unconfirmed, sets:from_list(Confirmed)))

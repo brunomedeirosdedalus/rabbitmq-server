@@ -194,9 +194,9 @@ dispatcher_add(function(sammy) {
             return false;
         });
 
-    path('#/users', {'users': {path:    '/users',
-                               options: {sort:true}},
-                     'permissions': '/permissions'}, 'users');
+    sammy.get('#/users', function() {
+        renderUsers();
+    });
     sammy.get('#/users/:id', function() {
         var vhosts = JSON.parse(sync_get('/vhosts'));
         const current_vhost = get_pref('vhost');
@@ -296,14 +296,13 @@ dispatcher_add(function(sammy) {
 
     sammy.put('#/logout', function() {
         // clear a local storage value used by earlier versions
-        clear_pref('auth');
-        clear_cookie_value('auth');
-        clear_cookie_value('m');
+        clear_auth()
         if (oauth.logged_in) {
             oauth.logged_in = false;
             oauth_initiateLogout();
         }else {
-          location.reload();
+          go_to_home()
+//          location.reload();
         }
     });
 

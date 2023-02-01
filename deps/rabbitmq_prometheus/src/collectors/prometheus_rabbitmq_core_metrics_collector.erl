@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 -module(prometheus_rabbitmq_core_metrics_collector).
 -export([register/0,
@@ -262,13 +262,14 @@ collect_mf(_Registry, Callback) ->
     ok.
 
 collect(PerObjectMetrics, Prefix, VHostsFilter, QueuesFilter, IncludedMFs, Callback) ->
-    [begin
+    _ = [begin
          Data = get_data(Table, PerObjectMetrics, VHostsFilter, QueuesFilter),
          mf(Callback, Prefix, Contents, Data)
-     end || {Table, Contents} <- IncludedMFs, not mutually_exclusive_mf(PerObjectMetrics, Table, IncludedMFs)].
+     end || {Table, Contents} <- IncludedMFs, not mutually_exclusive_mf(PerObjectMetrics, Table, IncludedMFs)],
+    ok.
 
 totals(Callback) ->
-    [begin
+    _ = [begin
          Size = ets:info(Table, size),
          mf_totals(Callback, Name, Type, Help, Size)
      end || {Table, Name, Type, Help} <- ?TOTALS],
@@ -345,7 +346,7 @@ add_metric_family({Name, Type, Help, Metrics}, Callback) ->
     Callback(create_mf(MN, Help, Type, Metrics)).
 
 mf(Callback, Prefix, Contents, Data) ->
-    [begin
+    _ = [begin
          Fun = case Conversion of
                    undefined ->
                        fun(D) -> element(Index, D) end;

@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_access_control).
@@ -18,7 +18,7 @@
 
 -export_type([permission_atom/0]).
 
--type permission_atom() :: 'configure' | 'read' | 'write'.
+-type permission_atom() :: 'configure' | 'write' | 'read'.
 
 %%----------------------------------------------------------------------------
 
@@ -194,8 +194,8 @@ check_resource_access(User = #user{username       = Username,
               check_access(
                 fun() -> Module:check_resource_access(
                            auth_user(User, Impl), Resource, Permission, Context) end,
-                Module, "access to ~ts refused for user '~ts'",
-                [rabbit_misc:rs(Resource), Username]);
+                Module, "~s access to ~s refused for user '~s'",
+                [Permission, rabbit_misc:rs(Resource), Username]);
          (_, Else) -> Else
       end, ok, Modules).
 
@@ -207,8 +207,8 @@ check_topic_access(User = #user{username = Username,
             check_access(
                 fun() -> Module:check_topic_access(
                     auth_user(User, Impl), Resource, Permission, Context) end,
-                Module, "access to topic '~ts' in exchange ~ts refused for user '~ts'",
-                [maps:get(routing_key, Context), rabbit_misc:rs(Resource), Username]);
+                Module, "~s access to topic '~s' in exchange ~s refused for user '~s'",
+                [Permission, maps:get(routing_key, Context), rabbit_misc:rs(Resource), Username]);
             (_, Else) -> Else
         end, ok, Modules).
 

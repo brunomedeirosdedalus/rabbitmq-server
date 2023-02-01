@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2018-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2018-2023 VMware, Inc. or its affiliates.  All rights reserved.
 
 -module(quorum_queue_SUITE).
 
@@ -171,8 +171,6 @@ init_per_suite(Config0) ->
     rabbit_ct_helpers:log_environment(),
     Config1 = rabbit_ct_helpers:merge_app_env(
                 Config0, {rabbit, [{quorum_tick_interval, 1000}]}),
-    rabbit_ct_helpers:merge_app_env(
-      Config1, {aten, [{poll_interval, 1000}]}),
     rabbit_ct_helpers:run_setup_steps(Config1, []).
 
 end_per_suite(Config) ->
@@ -2936,7 +2934,7 @@ cancel_and_consume_with_same_tag(Config) ->
 
     ok = cancel(Ch),
 
-    
+
 
     ok.
 

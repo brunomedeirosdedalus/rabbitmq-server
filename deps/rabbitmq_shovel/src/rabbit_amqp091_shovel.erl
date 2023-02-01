@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_amqp091_shovel).
@@ -30,6 +30,7 @@
          close_dest/1,
          ack/3,
          nack/3,
+         status/1,
          forward/4
         ]).
 
@@ -173,16 +174,16 @@ forward_pending(State) ->
     end.
 
 forward(IncomingTag, Props, Payload, State) ->
-    State1 = control_throttle(State),
-    case is_blocked(State1) of
+    case is_blocked(State) of
         true ->
             %% We are blocked by client-side flow-control and/or
             %% `connection.blocked` message from the destination
             %% broker. Simply cache the forward.
             PendingEntry = {IncomingTag, Props, Payload},
-            add_pending(PendingEntry, State1);
+            add_pending(PendingEntry, State);
         false ->
-            do_forward(IncomingTag, Props, Payload, State1)
+            State1 = do_forward(IncomingTag, Props, Payload, State),
+            control_throttle(State1)
     end.
 
 do_forward(IncomingTag, Props, Payload,
@@ -381,6 +382,13 @@ is_blocked(#{dest := #{blocked_by := BlockReasons}}) when BlockReasons =/= [] ->
     true;
 is_blocked(_) ->
     false.
+
+status(#{dest := #{blocked_by := [flow]}}) ->
+    flow;
+status(#{dest := #{blocked_by := BlockReasons}}) when BlockReasons =/= [] ->
+    blocked;
+status(_) ->
+    running.
 
 add_pending(Elem, State = #{dest := Dest}) ->
     Pending = maps:get(pending, Dest, queue:new()),

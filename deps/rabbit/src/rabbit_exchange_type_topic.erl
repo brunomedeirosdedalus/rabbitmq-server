@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_exchange_type_topic).
@@ -64,7 +64,7 @@ add_binding(none, _Exchange, _Binding) ->
 remove_bindings(transaction, _X, Bs) ->
     %% See rabbit_binding:lock_route_tables for the rationale for
     %% taking table locks.
-    case Bs of
+    _ = case Bs of
         [_] -> ok;
         _   -> [mnesia:lock({table, T}, write) ||
                    T <- [rabbit_topic_trie_node,

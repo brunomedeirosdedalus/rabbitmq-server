@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2017-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2017-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 %% This module implements a vhost identity process.
@@ -15,8 +15,8 @@
 
 %% On termination, the ptocess will notify of vhost going down.
 
-%% The process will also check periodically if the vhost still
-%% present in mnesia DB and stop the vhost supervision tree when it
+%% The process will also check periodically if the vhost is still
+%% present in the database and stop the vhost supervision tree when it
 %% disappears.
 
 -module(rabbit_vhost_process).
@@ -42,7 +42,7 @@ init([VHost]) ->
         %% Recover the vhost data and save it to vhost registry.
         ok = rabbit_vhost:recover(VHost),
         rabbit_vhost_sup_sup:save_vhost_process(VHost, self()),
-        timer:send_interval(?VHOST_CHECK_INTERVAL, check_vhost),
+        _ = timer:send_interval(?VHOST_CHECK_INTERVAL, check_vhost),
         true = erlang:garbage_collect(),
         {ok, VHost}
     catch _:Reason:Stacktrace ->

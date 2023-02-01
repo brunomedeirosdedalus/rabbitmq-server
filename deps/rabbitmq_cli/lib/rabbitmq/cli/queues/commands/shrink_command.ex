@@ -2,7 +2,7 @@
 ## License, v. 2.0. If a copy of the MPL was not distributed with this
 ## file, You can obtain one at https://mozilla.org/MPL/2.0/.
 ##
-## Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+## Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 
 defmodule RabbitMQ.CLI.Queues.Commands.ShrinkCommand do
   alias RabbitMQ.CLI.Core.DocGuide
@@ -107,6 +107,6 @@ defmodule RabbitMQ.CLI.Queues.Commands.ShrinkCommand do
   end
 
   defp format_result({:error, _size, err}) do
-    :io.format("error: ~W", [err, 10])
+    to_string(:io_lib.format("error: ~W", [err, 10]))
   end
 end

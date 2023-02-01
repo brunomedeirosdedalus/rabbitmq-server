@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(per_vhost_msg_store_SUITE).
@@ -193,7 +193,7 @@ folder_size(Dir) ->
                        fun(F,Acc) -> filelib:file_size(F) + Acc end, 0).
 
 get_global_folder_size(Config) ->
-    BaseDir = rabbit_ct_broker_helpers:rpc(Config, 0, rabbit_mnesia, dir, []),
+    BaseDir = rabbit_ct_broker_helpers:rpc(Config, 0, rabbit, data_dir, []),
     folder_size(BaseDir).
 
 vhost_dir(Vhost, Config) ->

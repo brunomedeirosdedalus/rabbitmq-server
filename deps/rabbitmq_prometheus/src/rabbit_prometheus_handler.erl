@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 -module(rabbit_prometheus_handler).
 
@@ -94,11 +94,7 @@ reply(Registry, Request) ->
         {true, RealRegistry} ->
             format_metrics(Request, RealRegistry);
         {registry_conflict, _ReqR, _ConfR} ->
-            {409, [], <<>>};
-        {registry_not_found, _ReqR} ->
-            {404, [], <<>>};
-        false ->
-            false
+            {409, [], <<>>}
     end.
 
 format_metrics(Request, Registry) ->

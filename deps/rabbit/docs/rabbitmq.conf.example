@@ -265,7 +265,23 @@
 # ssl_handshake_timeout = 5000
 
 
+##
+## Loading Definitions
+## ====================
+##
+## Relevant documentation: https://www.rabbitmq.com/definitions.html#import-on-boot
+##
+## To import definitions from a local file on node boot, set the
+## load_definitions config key to a path of a previously exported
+## JSON file with definitions. Does not require management plugin
+## to be enabled.
+##
+# load_definitions = /path/to/definitions/file.json
+
+
+##
 ## Cluster name
+## ====================
 ##
 # cluster_name = dev3.eng.megacorp.local
 
@@ -739,7 +755,7 @@
 # stomp.tcp_listen_options.nodelay   = true
 #
 # stomp.tcp_listen_options.exit_on_close = true
-# stomp.tcp_listen_options.send_timeout  = 120
+# stomp.tcp_listen_options.send_timeout  = 120000
 
 ## Proxy protocol support
 ##
@@ -822,7 +838,7 @@
 # mqtt.tcp_listen_options.nodelay   = true
 #
 # mqtt.tcp_listen_options.exit_on_close = true
-# mqtt.tcp_listen_options.send_timeout  = 120
+# mqtt.tcp_listen_options.send_timeout  = 120000
 
 ## TLS listener settings
 ## ## See https://rabbitmq.com/mqtt.html and https://rabbitmq.com/ssl.html for details.

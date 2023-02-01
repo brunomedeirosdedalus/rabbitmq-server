@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 %% This module is responsible for loading definition from a local filesystem
@@ -96,7 +96,7 @@ load_with_hashing(IsDir, Path, PreviousHash, Algo) when is_boolean(IsDir) ->
                 PreviousHash -> PreviousHash;
                 Other        ->
                     rabbit_log:debug("New hash: ~ts", [rabbit_misc:hexify(Other)]),
-                    load_from_local_path(IsDir, Path),
+                    _ = load_from_local_path(IsDir, Path),
                     Other
             end
     end.

@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_msg_store).
@@ -50,7 +50,7 @@
 -record(msstate,
         {
           %% store directory
-          dir,
+          dir :: file:filename(),
           %% the module for index ops,
           %% rabbit_msg_store_ets_index by default
           index_module,
@@ -149,7 +149,8 @@
                       file_handle_cache  :: map(),
                       index_state        :: any(),
                       index_module       :: atom(),
-                      dir                :: file:filename(),
+                      %% Stored as binary() as opposed to file:filename() to save memory.
+                      dir                :: binary(),
                       gc_pid             :: pid(),
                       file_handles_ets   :: ets:tid(),
                       file_summary_ets   :: ets:tid(),
@@ -466,7 +467,7 @@ client_init(Server, Ref, MsgOnDiskFun, CloseFDsFun) when is_pid(Server); is_atom
                       file_handle_cache  = #{},
                       index_state        = IState,
                       index_module       = IModule,
-                      dir                = Dir,
+                      dir                = rabbit_file:filename_to_binary(Dir),
                       gc_pid             = GCPid,
                       file_handles_ets   = FileHandlesEts,
                       file_summary_ets   = FileSummaryEts,
@@ -477,13 +478,13 @@ client_init(Server, Ref, MsgOnDiskFun, CloseFDsFun) when is_pid(Server); is_atom
 -spec client_terminate(client_msstate()) -> 'ok'.
 
 client_terminate(CState = #client_msstate { client_ref = Ref }) ->
-    close_all_handles(CState),
+    _ = close_all_handles(CState),
     ok = server_call(CState, {client_terminate, Ref}).
 
 -spec client_delete_and_terminate(client_msstate()) -> 'ok'.
 
 client_delete_and_terminate(CState = #client_msstate { client_ref = Ref }) ->
-    close_all_handles(CState),
+    _ = close_all_handles(CState),
     ok = server_cast(CState, {client_dying, Ref}),
     ok = server_cast(CState, {client_delete, Ref}).
 
@@ -1509,10 +1510,16 @@ get_read_handle(FileNum, State = #msstate { file_handle_cache = FHC,
 get_read_handle(FileNum, FHC, Dir) ->
     case maps:find(FileNum, FHC) of
         {ok, Hdl} -> {Hdl, FHC};
-        error     -> {ok, Hdl} = open_file(Dir, filenum_to_name(FileNum),
+        error     -> {ok, Hdl} = open_file(to_filename(Dir),
+                                           filenum_to_name(FileNum),
                                            ?READ_MODE),
                      {Hdl, maps:put(FileNum, Hdl, FHC)}
     end.
+
+to_filename(Name) when is_list(Name) ->
+    Name;
+to_filename(Bin) when is_binary(Bin) ->
+    rabbit_file:binary_to_filename(Bin).
 
 preallocate(Hdl, FileSizeLimit, FinalPos) ->
     {ok, FileSizeLimit} = file_handle_cache:position(Hdl, FileSizeLimit),
@@ -2189,14 +2196,14 @@ copy_messages(WorkList, InitOffset, FinalOffset, SourceHdl, DestinationHdl,
                        _ ->
                            %% found a gap, so actually do the work for
                            %% the previous block
-                           Copy(Block),
+                           _ = Copy(Block),
                            {Offset, Offset + TotalSize}
                    end}
           end, {InitOffset, {undefined, undefined}}, WorkList) of
         {FinalOffset, Block} ->
             case WorkList of
                 [] -> ok;
-                _  -> Copy(Block), %% do the last remaining block
+                _  -> _ = Copy(Block), %% do the last remaining block
                       ok = file_handle_cache:sync(DestinationHdl)
             end;
         {FinalOffsetZ, _Block} ->

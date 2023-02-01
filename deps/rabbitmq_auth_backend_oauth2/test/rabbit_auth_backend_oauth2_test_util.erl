@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 -module(rabbit_auth_backend_oauth2_test_util).
 
@@ -86,6 +86,9 @@ token_with_scopes_and_expiration(Scopes, Expiration) ->
 
 fixture_token() ->
     fixture_token([]).
+
+token_with_sub(TokenFixture, Sub) ->
+    maps:put(<<"sub">>, Sub, TokenFixture).
 
 fixture_token(ExtraScopes) ->
     Scopes = [<<"rabbitmq.configure:vhost/foo">>,

@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2018-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2018-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_event_exchange_decorator).
@@ -14,10 +14,9 @@
                    [{description, "event exchange decorator"},
                     {mfa, {rabbit_registry, register,
                            [exchange_decorator, <<"event">>, ?MODULE]}},
-                    {requires, rabbit_registry},
                     {cleanup, {rabbit_registry, unregister,
                                [exchange_decorator, <<"event">>]}},
-                    {enables, recovery}]}).
+                    {requires, [rabbit_registry, recovery]}]}).
 
 -behaviour(rabbit_exchange_decorator).
 

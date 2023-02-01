@@ -11,7 +11,7 @@
 %% The Original Code is RabbitMQ.
 %%
 %% The Initial Developer of the Original Code is Pivotal Software, Inc.
-%% Copyright (c) 2020-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2020-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_stream).
@@ -53,8 +53,7 @@ start(_Type, _Args) ->
                                ++ "Enable stream_queue feature flag then disable "
                                   "and re-enable the rabbitmq_stream plugin. ",
                                "See https://www.rabbitmq.com/feature-flags.html "
-                               "to learn more",
-                               []),
+                               "to learn more"),
             {ok, self()}
     end.
 

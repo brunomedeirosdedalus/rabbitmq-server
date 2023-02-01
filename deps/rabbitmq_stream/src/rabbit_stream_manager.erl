@@ -11,7 +11,7 @@
 %% The Original Code is RabbitMQ.
 %%
 %% The Initial Developer of the Original Code is Pivotal Software, Inc.
-%% Copyright (c) 2020-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2020-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_stream_manager).
@@ -267,11 +267,11 @@ handle_call({create_super_stream,
                                 ok ->
                                     {reply, ok, State};
                                 Error ->
-                                    [Fun() || Fun <- RollbackOps],
+                                    _ = [Fun() || Fun <- RollbackOps],
                                     {reply, Error, State}
                             end;
                         {{error, Reason}, RollbackOps} ->
-                            [Fun() || Fun <- RollbackOps],
+                            _ = [Fun() || Fun <- RollbackOps],
                             {reply, {error, Reason}, State}
                     end;
                 {error, Msg} ->
@@ -288,7 +288,8 @@ handle_call({delete_super_stream, VirtualHost, SuperStream, Username},
                 ok ->
                     ok;
                 {error, Error} ->
-                    rabbit_log:warning("Error while deleting super stream exchange ~tp, ~tp",
+                    rabbit_log:warning("Error while deleting super stream exchange ~tp, "
+                                       "~tp",
                                        [SuperStream, Error]),
                     ok
             end,
@@ -409,9 +410,7 @@ handle_call({topology, VirtualHost, Stream}, _From, State) ->
               {error, not_found} ->
                   {error, stream_not_found};
               {error, not_available} ->
-                  {error, stream_not_available};
-              R ->
-                  R
+                  {error, stream_not_available}
           end,
     {reply, Res, State};
 handle_call({route, RoutingKey, VirtualHost, SuperStream}, _From,
@@ -444,13 +443,13 @@ handle_call({partitions, VirtualHost, SuperStream}, _From, State) ->
 handle_call({partition_index, VirtualHost, SuperStream, Stream},
             _From, State) ->
     ExchangeName = rabbit_misc:r(VirtualHost, exchange, SuperStream),
-    rabbit_log:debug("Looking for partition index of stream ~tp in super "
-                     "stream ~tp (virtual host ~tp)",
+    rabbit_log:debug("Looking for partition index of stream ~tp in "
+                     "super stream ~tp (virtual host ~tp)",
                      [Stream, SuperStream, VirtualHost]),
     Res = try
-              rabbit_exchange:lookup_or_die(ExchangeName),
+              _ = rabbit_exchange:lookup_or_die(ExchangeName),
               UnorderedBindings =
-                  [Binding
+                  _ = [Binding
                    || Binding = #binding{destination = #resource{name = Q} = D}
                           <- rabbit_binding:list_for_source(ExchangeName),
                       is_resource_stream_queue(D), Q == Stream],
@@ -619,7 +618,7 @@ delete_stream(VirtualHost, Reference, Username) ->
 super_stream_partitions(VirtualHost, SuperStream) ->
     ExchangeName = rabbit_misc:r(VirtualHost, exchange, SuperStream),
     try
-        rabbit_exchange:lookup_or_die(ExchangeName),
+        _ = rabbit_exchange:lookup_or_die(ExchangeName),
         UnorderedBindings =
             [Binding
              || Binding = #binding{destination = D}
@@ -734,7 +733,8 @@ declare_super_stream_exchange(VirtualHost, Name, Username) ->
             catch
                 exit:ExitError ->
                     % likely to be a problem of inequivalent args on an existing stream
-                    rabbit_log:error("Error while creating ~tp super stream exchange: ~tp",
+                    rabbit_log:error("Error while creating ~tp super stream exchange: "
+                                     "~tp",
                                      [Name, ExitError]),
                     {error, validation_failed}
             end;
@@ -816,12 +816,6 @@ add_super_stream_binding(VirtualHost,
             {error,
              {stream_not_found,
               rabbit_misc:format("stream ~ts does not exists (absent)", [Q])}};
-        {error, binding_not_found} ->
-            {error,
-             {not_found,
-              rabbit_misc:format("no binding ~ts between ~ts and ~ts",
-                                 [RoutingKey, rabbit_misc:rs(ExchangeName),
-                                  rabbit_misc:rs(QueueName)])}};
         {error, {binding_invalid, Fmt, Args}} ->
             {error, {binding_invalid, rabbit_misc:format(Fmt, Args)}};
         {error, #amqp_error{} = Error} ->

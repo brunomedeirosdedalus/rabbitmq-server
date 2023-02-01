@@ -2,14 +2,14 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_table).
 
 -export([
     create/0, create/2, ensure_local_copies/1, ensure_table_copy/3,
-    wait_for_replicated/1, wait/1, wait/2,
+    create_local_copy/2, wait_for_replicated/1, wait/1, wait/2,
     force_load/0, is_present/0, is_empty/0, needs_default_data/0,
     check_schema_integrity/1, clear_ram_only_tables/0, retry_timeout/0,
     wait_for_replicated/0, exists/1]).
@@ -39,7 +39,7 @@ create() ->
     ensure_secondary_indexes(),
     ok.
 
--spec create(mnesia:table(), list()) -> rabbit_types:ok_or_error(any()).
+-spec create(atom(), list()) -> rabbit_types:ok_or_error(any()).
 
 create(TableName, TableDefinition) ->
     TableDefinition1 = proplists:delete(match, TableDefinition),
@@ -52,11 +52,12 @@ create(TableName, TableDefinition) ->
             throw({error, {table_creation_failed, TableName, TableDefinition1, Reason}})
     end.
 
--spec exists(mnesia:table()) -> boolean().
+-spec exists(atom()) -> boolean().
 exists(Table) ->
     case mnesia:is_transaction() of
         true ->
-            mnesia_schema:get_tid_ts_and_lock(schema, read);
+            _ = mnesia_schema:get_tid_ts_and_lock(schema, read),
+            ok;
         false ->
             ok
     end,
@@ -73,7 +74,7 @@ ensure_secondary_index(Table, Field) ->
     {aborted, {already_exists, Table, _}} -> ok
   end.
 
--spec ensure_table_copy(mnesia:table(), node(), ram_copies | disc_copies) ->
+-spec ensure_table_copy(mnesia:table(), node(), mnesia:storage_type()) ->
     ok | {error, any()}.
 ensure_table_copy(TableName, Node, StorageType) ->
     rabbit_log:debug("Will add a local schema database copy for table '~ts'", [TableName]),
@@ -152,7 +153,7 @@ retry_timeout() ->
 
 -spec force_load() -> 'ok'.
 
-force_load() -> [mnesia:force_load_table(T) || T <- names()], ok.
+force_load() -> _ = [mnesia:force_load_table(T) || T <- names()], ok.
 
 -spec is_present() -> boolean().
 
@@ -238,6 +239,7 @@ create_local_copies(Type) ->
       end, definitions(Type)),
     ok.
 
+-spec create_local_copy(mnesia:table(), mnesia:storage_type()) -> ok.
 create_local_copy(Tab, Type) ->
     StorageType = mnesia:table_info(Tab, storage_type),
     {atomic, ok} =

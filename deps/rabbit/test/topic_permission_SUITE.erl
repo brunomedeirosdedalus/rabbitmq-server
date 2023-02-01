@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2011-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2011-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(topic_permission_SUITE).
@@ -127,11 +127,11 @@ topic_permission_database_access1(_Config) ->
     )),
 
     {error, {no_such_user, _}} = (catch rabbit_auth_backend_internal:list_user_topic_permissions(
-        "non-existing-user"
+        <<"non-existing-user">>
     )),
 
     {error, {no_such_vhost, _}} = (catch rabbit_auth_backend_internal:list_vhost_topic_permissions(
-        "non-existing-vhost"
+        <<"non-existing-vhost">>
     )),
 
     {error, {invalid_regexp, _, _}} = (catch rabbit_auth_backend_internal:set_topic_permissions(

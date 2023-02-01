@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_mnesia_rename).
@@ -60,10 +60,10 @@ rename(Node, NodeMapList) ->
         %% And make the actual changes
         become(FromNode),
         take_backup(before_backup_name()),
-        convert_backup(NodeMap, before_backup_name(), after_backup_name()),
+        _ = convert_backup(NodeMap, before_backup_name(), after_backup_name()),
         ok = rabbit_file:write_term_file(rename_config_name(),
                                          [{FromNode, ToNode}]),
-        convert_config_files(NodeMap),
+        _ = convert_config_files(NodeMap),
         become(ToNode),
         restore_backup(after_backup_name()),
         ok
@@ -152,7 +152,7 @@ finish(FromNode, ToNode, AllNodes) ->
             rabbit_log:info(
               "Abandoning rename from ~ts to ~ts since we are still ~ts",
               [FromNode, ToNode, FromNode]),
-            [{ok, _} = file:copy(backup_of_conf(F), F) || F <- config_files()],
+            _ = [{ok, _} = file:copy(backup_of_conf(F), F) || F <- config_files()],
             ok = rabbit_file:recursive_delete([rabbit_mnesia:dir()]),
             ok = rabbit_file:recursive_copy(
                    mnesia_copy_dir(), rabbit_mnesia:dir()),
@@ -272,7 +272,7 @@ rename_in_running_mnesia(FromNode, ToNode) ->
 transform_table(Table, Map) ->
     mnesia:sync_transaction(
       fun () ->
-              mnesia:lock({table, Table}, write),
+              _ = mnesia:lock({table, Table}, write),
               transform_table(Table, Map, mnesia:first(Table))
       end).
 

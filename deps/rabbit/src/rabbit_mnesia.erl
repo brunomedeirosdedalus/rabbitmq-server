@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_mnesia).
@@ -25,6 +25,7 @@
          is_registered_process_alive/1,
          cluster_nodes/1,
          node_type/0,
+         is_virgin_node/0,
          dir/0,
          cluster_status_from_mnesia/0,
 
@@ -329,7 +330,7 @@ update_cluster_nodes(DiscoveryNode) ->
             %% As in `check_consistency/0', we can safely delete the
             %% schema here, since it'll be replicated from the other
             %% nodes
-            mnesia:delete_schema([node()]),
+            _ = mnesia:delete_schema([node()]),
             rabbit_node_monitor:write_cluster_status(Status),
             rabbit_log:info("Updating cluster nodes from ~tp",
                             [DiscoveryNode]),
@@ -563,12 +564,12 @@ init_db(ClusterNodes, NodeType, CheckOtherNodes) ->
             ok;
         {[], true, disc} ->
             %% First disc node up
-            maybe_force_load(),
+            _ = maybe_force_load(),
             ensure_feature_flags_are_in_sync(Nodes, NodeIsVirgin),
             ok;
         {[_ | _], _, _} ->
             %% Subsequent node in cluster, catch up
-            maybe_force_load(),
+            _ = maybe_force_load(),
             %% We want to synchronize feature flags first before we wait for
             %% tables (which is needed to ensure the local view of the tables
             %% matches the rest of the cluster). The reason is that some
@@ -716,7 +717,8 @@ check_cluster_consistency() ->
                     %% disbanded, we're left with a node with no
                     %% mnesia data that will try to connect to offline
                     %% nodes.
-                    mnesia:delete_schema([node()])
+                    _ = mnesia:delete_schema([node()]),
+                    ok
             end,
             rabbit_node_monitor:write_cluster_status(Status);
         {error, not_found} ->
@@ -958,9 +960,9 @@ with_running_or_clean_mnesia(Fun) ->
             application:unset_env(mnesia, dir),
             SchemaLoc = application:get_env(mnesia, schema_location, opt_disc),
             application:set_env(mnesia, schema_location, ram),
-            mnesia:start(),
+            _ = mnesia:start(),
             Result = Fun(),
-            application:stop(mnesia),
+            _ = application:stop(mnesia),
             application:set_env(mnesia, dir, SavedMnesiaDir),
             application:set_env(mnesia, schema_location, SchemaLoc),
             Result

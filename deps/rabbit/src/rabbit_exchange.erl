@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_exchange).
@@ -288,7 +288,7 @@ lookup_scratch(Name, App) ->
 update_scratch(Name, App, Fun) ->
     rabbit_misc:execute_mnesia_transaction(
       fun() ->
-              update(Name,
+              _ = update(Name,
                      fun(X = #exchange{scratches = Scratches0}) ->
                              Scratches1 = case Scratches0 of
                                               undefined -> orddict:new();
@@ -311,7 +311,7 @@ update_decorators(Name) ->
     rabbit_misc:execute_mnesia_transaction(
       fun() ->
               case mnesia:wread({rabbit_exchange, Name}) of
-                  [X] -> store_ram(X),
+                  [X] -> _ = store_ram(X),
                          ok;
                   []  -> ok
               end
@@ -393,7 +393,11 @@ info_all(VHostPath, Items, Ref, AggregatorPid) ->
     rabbit_control_misc:emitting_map(
       AggregatorPid, Ref, fun(X) -> info(X, Items) end, list(VHostPath)).
 
--spec route(rabbit_types:exchange(), rabbit_types:delivery())
+%% rabbit_types:delivery() is more strict than #delivery{}, some
+%% fields can't be undefined. But there are places where
+%% rabbit_exchange:route/2 is called with the absolutely bare delivery
+%% like #delivery{message = #basic_message{routing_keys = [...]}}
+-spec route(rabbit_types:exchange(), #delivery{})
                  -> [rabbit_amqqueue:name()].
 
 route(#exchange{name = #resource{virtual_host = VHost, name = RName} = XName,
@@ -487,7 +491,7 @@ delete(XName, IfUnused, Username) ->
         %% a race condition between it and an exchange.delete.
         %%
         %% see rabbitmq/rabbitmq-federation#7
-        rabbit_runtime_parameters:set(XName#resource.virtual_host,
+        _ = rabbit_runtime_parameters:set(XName#resource.virtual_host,
                                       ?EXCHANGE_DELETE_IN_PROGRESS_COMPONENT,
                                       XName#resource.name, true, Username),
         call_with_exchange(

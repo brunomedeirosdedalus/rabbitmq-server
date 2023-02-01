@@ -2,10 +2,10 @@
 ## License, v. 2.0. If a copy of the MPL was not distributed with this
 ## file, You can obtain one at https://mozilla.org/MPL/2.0/.
 ##
-## Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+## Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 
 defmodule RabbitMQ.CLI.Core.CommandModules do
-  alias RabbitMQ.CLI.Core.{Config, DataCoercion}
+  alias RabbitMQ.CLI.Core.{Config, DataCoercion, Helpers}
   alias RabbitMQ.CLI.Plugins.Helpers, as: PluginsHelpers
   alias RabbitMQ.CLI.CommandBehaviour
 
@@ -45,7 +45,13 @@ defmodule RabbitMQ.CLI.Core.CommandModules do
   end
 
   def load_commands(scope, opts) do
-    make_module_map(plugin_modules(opts) ++ ctl_modules(), scope)
+    nopts =
+      case Helpers.normalise_node_option(opts) do
+        {:error, _} -> opts
+        {:ok, options} -> options
+      end
+
+    make_module_map(plugin_modules(nopts) ++ ctl_modules(), scope)
   end
 
   def ctl_modules() do

@@ -1,5 +1,6 @@
 *~
 .sw?
+*.tmp
 .*.sw?
 /.erlang.mk/
 /_build/
@@ -70,6 +71,8 @@ rebar3.crashdump
 *.plt
 *.lock
 
+/logs/
+
 /topic-branch-scratch/
 
 PACKAGES/
@@ -87,6 +90,7 @@ callgrand*
 
 /user.bazelrc
 /bazel-*
+/extra_deps/
 
 .vscode
 .idea

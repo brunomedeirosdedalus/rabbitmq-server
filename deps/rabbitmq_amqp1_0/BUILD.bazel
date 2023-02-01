@@ -10,6 +10,7 @@ load(
     "rabbitmq_app",
     "rabbitmq_integration_suite",
     "rabbitmq_suite",
+    "without",
 )
 load(
     ":app.bzl",

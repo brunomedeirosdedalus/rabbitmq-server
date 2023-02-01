@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_exchange_decorator).
@@ -100,6 +100,6 @@ maybe_recover(X = #exchange{name       = Name,
     case New of
         Old -> ok;
         _   -> %% TODO create a tx here for non-federation decorators
-               [M:create(none, X) || M <- New -- Old],
+               _ = [M:create(none, X) || M <- New -- Old],
                rabbit_exchange:update_decorators(Name)
     end.

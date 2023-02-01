@@ -2,11 +2,11 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2021-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2021-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 %% @author The RabbitMQ team
-%% @copyright 2022 VMware, Inc. or its affiliates.
+%% @copyright 2023 VMware, Inc. or its affiliates.
 %%
 %% @doc
 %% The feature flag controller is responsible for synchronization and managing
@@ -33,16 +33,20 @@
 
 -export([is_supported/1, is_supported/2,
          enable/1,
+         enable_default/0,
          check_node_compatibility/1,
          sync_cluster/0,
-         refresh_after_app_load/0]).
+         refresh_after_app_load/0,
+         get_forced_feature_flag_names/0]).
 
 %% Internal use only.
 -export([start/0,
          start_link/0,
          rpc_call/5,
          all_nodes/0,
-         running_nodes/0]).
+         running_nodes/0,
+         collect_inventory_on_nodes/1, collect_inventory_on_nodes/2,
+         mark_as_enabled_on_nodes/4]).
 
 %% gen_statem callbacks.
 -export([callback_mode/0,
@@ -95,6 +99,25 @@ enable(FeatureNames) when is_list(FeatureNames) ->
        [FeatureNames],
        #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
     gen_statem:call(?LOCAL_NAME, {enable, FeatureNames}).
+
+enable_default() ->
+    ?LOG_DEBUG(
+       "Feature flags: configure initial feature flags state",
+       [],
+       #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
+    case erlang:whereis(?LOCAL_NAME) of
+        Pid when is_pid(Pid) ->
+            %% The function is called while `rabbit' is running.
+            gen_statem:call(?LOCAL_NAME, enable_default);
+        undefined ->
+            %% The function is called while `rabbit' is stopped. We need to
+            %% start a one-off controller, again to make sure concurrent
+            %% changes are blocked.
+            {ok, Pid} = start_link(),
+            Ret = gen_statem:call(Pid, enable_default),
+            gen_statem:stop(Pid),
+            Ret
+    end.
 
 check_node_compatibility(RemoteNode) ->
     ThisNode = node(),
@@ -248,6 +271,8 @@ updating_feature_flag_states(
 
 proceed_with_task({enable, FeatureNames}) ->
     enable_task(FeatureNames);
+proceed_with_task(enable_default) ->
+    enable_default_task();
 proceed_with_task(sync_cluster) ->
     sync_cluster_task();
 proceed_with_task(refresh_after_app_load) ->
@@ -451,6 +476,122 @@ enable_task(FeatureNames) ->
             {error, missing_clustered_nodes}
     end.
 
+enable_default_task() ->
+    FeatureNames = get_forced_feature_flag_names(),
+    case FeatureNames of
+        undefined ->
+            ?LOG_DEBUG(
+              "Feature flags: starting an unclustered node for the first "
+              "time: all stable feature flags will be enabled by default",
+              #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
+            {ok, Inventory} = collect_inventory_on_nodes([node()]),
+            #{feature_flags := FeatureFlags} = Inventory,
+            StableFeatureNames =
+            maps:fold(
+              fun
+                  (FeatureName, #{stability := stable}, Acc) ->
+                      [FeatureName | Acc];
+                  (_FeatureName, _FeatureProps, Acc) ->
+                      Acc
+              end, [], FeatureFlags),
+            enable_many(Inventory, StableFeatureNames);
+        [] ->
+            ?LOG_DEBUG(
+              "Feature flags: starting an unclustered node for the first "
+              "time: all feature flags are forcibly left disabled from "
+              "the $RABBITMQ_FEATURE_FLAGS environment variable",
+              #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
+            ok;
+        _ ->
+            ?LOG_DEBUG(
+               "Feature flags: starting an unclustered node for the first "
+               "time: only the following feature flags specified in the "
+               "$RABBITMQ_FEATURE_FLAGS environment variable will be enabled: "
+               "~tp",
+               [FeatureNames],
+               #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
+            {ok, Inventory} = collect_inventory_on_nodes([node()]),
+            enable_many(Inventory, FeatureNames)
+    end.
+
+-spec get_forced_feature_flag_names() -> Ret when
+      Ret :: FeatureNames | undefined,
+      FeatureNames :: [rabbit_feature_flags:feature_name()].
+%% @doc Returns the (possibly empty) list of feature flags the user wants to
+%% enable out-of-the-box when starting a node for the first time.
+%%
+%% Without this, the default is to enable all the supported stable feature
+%% flags.
+%%
+%% There are two ways to specify that list:
+%% <ol>
+%% <li>Using the `$RABBITMQ_FEATURE_FLAGS' environment variable; for
+%%   instance `RABBITMQ_FEATURE_FLAGS=quorum_queue,mnevis'.</li>
+%% <li>Using the `forced_feature_flags_on_init' configuration parameter;
+%%   for instance
+%%   `{rabbit, [{forced_feature_flags_on_init, [quorum_queue, mnevis]}]}'.</li>
+%% </ol>
+%%
+%% The environment variable has precedence over the configuration parameter.
+%%
+%% @private
+
+get_forced_feature_flag_names() ->
+    Ret = case get_forced_feature_flag_names_from_env() of
+              undefined -> get_forced_feature_flag_names_from_config();
+              List      -> List
+          end,
+    case Ret of
+        undefined ->
+            ok;
+        [] ->
+            ?LOG_INFO(
+               "Feature flags: automatic enablement of feature flags "
+               "disabled (i.e. none will be enabled automatically)",
+               #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS});
+        _ ->
+            ?LOG_INFO(
+               "Feature flags: automatic enablement of feature flags "
+               "limited to the following list: ~tp",
+               [Ret],
+               #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS})
+    end,
+    Ret.
+
+-spec get_forced_feature_flag_names_from_env() -> Ret when
+      Ret :: FeatureNames | undefined,
+      FeatureNames :: [rabbit_feature_flags:feature_name()].
+%% @private
+
+get_forced_feature_flag_names_from_env() ->
+    case rabbit_prelaunch:get_context() of
+        #{forced_feature_flags_on_init := ForcedFFs}
+          when is_list(ForcedFFs) ->
+            ForcedFFs;
+        _ ->
+            undefined
+    end.
+
+-spec get_forced_feature_flag_names_from_config() -> Ret when
+      Ret :: FeatureNames | undefined,
+      FeatureNames :: [rabbit_feature_flags:feature_name()].
+%% @private
+
+get_forced_feature_flag_names_from_config() ->
+    Value = application:get_env(
+              rabbit, forced_feature_flags_on_init, undefined),
+    case Value of
+        undefined ->
+            Value;
+        _ when is_list(Value) ->
+            case lists:all(fun is_atom/1, Value) of
+                true  -> Value;
+                false -> undefined
+            end;
+        _ ->
+            undefined
+    end.
+
 -spec sync_cluster_task() -> Ret when
       Ret :: ok | {error, Reason},
       Reason :: term().
@@ -577,7 +718,7 @@ enable_with_registry_locked(
                [FeatureName],
                #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
 
-            case update_feature_state_and_enable(Inventory, FeatureName) of
+            case check_required_and_enable(Inventory, FeatureName) of
                 {ok, _Inventory} = Ok ->
                     ?LOG_NOTICE(
                        "Feature flags: `~ts` enabled",
@@ -591,6 +732,71 @@ enable_with_registry_locked(
                        #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
                     Error
             end
+    end.
+
+-spec check_required_and_enable(Inventory, FeatureName) -> Ret when
+      Inventory :: rabbit_feature_flags:cluster_inventory(),
+      FeatureName :: rabbit_feature_flags:feature_name(),
+      Ret :: {ok, Inventory} | {error, Reason},
+      Reason :: term().
+
+check_required_and_enable(
+  #{feature_flags := FeatureFlags,
+    states_per_node := _} = Inventory,
+  FeatureName) ->
+    %% Required feature flags vs. virgin nodes.
+    FeatureProps = maps:get(FeatureName, FeatureFlags),
+    Stability = rabbit_feature_flags:get_stability(FeatureProps),
+    NodesWhereDisabled = list_nodes_where_feature_flag_is_disabled(
+                           Inventory, FeatureName),
+
+    MarkDirectly = case Stability of
+                       required ->
+                           ?LOG_DEBUG(
+                              "Feature flags: `~s`: the feature flag is "
+                              "required on some nodes; list virgin nodes "
+                              "to determine if the feature flag can simply "
+                              "be marked as enabled",
+                              [FeatureName],
+                              #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
+                           VirginNodesWhereDisabled =
+                           lists:filter(
+                             fun(Node) ->
+                                     case rabbit_db:is_virgin_node(Node) of
+                                         IsVirgin when is_boolean(IsVirgin) ->
+                                             IsVirgin;
+                                         undefined ->
+                                             false
+                                     end
+                             end, NodesWhereDisabled),
+                           VirginNodesWhereDisabled =:= NodesWhereDisabled;
+                       _ ->
+                           false
+                   end,
+
+    case MarkDirectly of
+        false ->
+            case Stability of
+                required ->
+                    ?LOG_DEBUG(
+                       "Feature flags: `~s`: some nodes where the feature "
+                       "flag is disabled are not virgin, we need to perform "
+                       "a regular sync",
+                       [FeatureName],
+                       #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS});
+                _ ->
+                    ok
+            end,
+            update_feature_state_and_enable(Inventory, FeatureName);
+        true ->
+            ?LOG_DEBUG(
+               "Feature flags: `~s`: all nodes where the feature flag is "
+               "disabled are virgin, we can directly mark it as enabled "
+               "there",
+               [FeatureName],
+               #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
+            mark_as_enabled_on_nodes(
+              NodesWhereDisabled, Inventory, FeatureName, true)
     end.
 
 -spec update_feature_state_and_enable(Inventory, FeatureName) -> Ret when
@@ -631,20 +837,36 @@ update_feature_state_and_enable(
                               Inventory2, FeatureName, NodesWhereDisabled),
                             Ret2;
                         Error ->
-                            _ = mark_as_enabled_on_nodes(
-                                  Nodes, Inventory, FeatureName, false),
+                            restore_feature_flag_state(
+                              Nodes, NodesWhereDisabled, Inventory,
+                              FeatureName),
                             Error
                     end;
                 Error ->
-                    _ = mark_as_enabled_on_nodes(
-                          Nodes, Inventory, FeatureName, false),
+                    restore_feature_flag_state(
+                      Nodes, NodesWhereDisabled, Inventory, FeatureName),
                     Error
             end;
         Error ->
-            _ = mark_as_enabled_on_nodes(
-                  Nodes, Inventory, FeatureName, false),
+            restore_feature_flag_state(
+              Nodes, NodesWhereDisabled, Inventory, FeatureName),
             Error
     end.
+
+restore_feature_flag_state(
+  Nodes, NodesWhereDisabled, Inventory, FeatureName) ->
+    NodesWhereEnabled = Nodes -- NodesWhereDisabled,
+    ?LOG_DEBUG(
+       "Feature flags: `~ts`: restore initial state after failing to enable "
+       "it:~n"
+       "  enabled on:  ~0p~n"
+       "  disabled on: ~0p",
+       [FeatureName, NodesWhereEnabled, NodesWhereDisabled]),
+    _ = mark_as_enabled_on_nodes(
+          NodesWhereEnabled, Inventory, FeatureName, true),
+    _ = mark_as_enabled_on_nodes(
+          NodesWhereDisabled, Inventory, FeatureName, false),
+    ok.
 
 -spec do_enable(Inventory, FeatureName, Nodes) -> Ret when
       Inventory :: rabbit_feature_flags:cluster_inventory(),
@@ -740,7 +962,7 @@ collect_inventory_on_nodes(Nodes, Timeout) ->
            {ok, #{feature_flags := FeatureFlags,
                   applications_per_node := ScannedAppsPerNode,
                   states_per_node := StatesPerNode} = Inventory}) ->
-            FeatureFlags2 = maps:merge(FeatureFlags, FeatureFlags1),
+            FeatureFlags2 = merge_feature_flags(FeatureFlags, FeatureFlags1),
             ScannedAppsPerNode1 = ScannedAppsPerNode#{Node => ScannedApps},
             StatesPerNode1 = StatesPerNode#{Node => FeatureStates},
             Inventory1 = Inventory#{
@@ -755,6 +977,31 @@ collect_inventory_on_nodes(Nodes, Timeout) ->
           (_Node, _Error, Error) ->
               Error
       end, {ok, Inventory0}, Rets).
+
+merge_feature_flags(FeatureFlagsA, FeatureFlagsB) ->
+    FeatureFlags = maps:merge(FeatureFlagsA, FeatureFlagsB),
+    maps:map(
+      fun(FeatureName, FeatureProps) ->
+              FeaturePropsA = maps:get(FeatureName, FeatureFlagsA, #{}),
+              FeaturePropsB = maps:get(FeatureName, FeatureFlagsB, #{}),
+
+              %% There is a rank between stability levels. If a feature flag
+              %% is required somewhere, it is required globally. Otherwise if
+              %% it is stable somewhere, it is stable globally.
+              StabilityA = rabbit_feature_flags:get_stability(FeaturePropsA),
+              StabilityB = rabbit_feature_flags:get_stability(FeaturePropsB),
+              Stability = case {StabilityA, StabilityB} of
+                              {required, _} -> required;
+                              {_, required} -> required;
+                              {stable, _}   -> stable;
+                              {_, stable}   -> stable;
+                              _             -> experimental
+                          end,
+
+              FeatureProps1 = FeatureProps#{stability => Stability},
+              FeatureProps2 = maps:remove(callbacks, FeatureProps1),
+              FeatureProps2
+      end, FeatureFlags).
 
 -spec list_feature_flags_enabled_somewhere(Inventory, HandleStateChanging) ->
     Ret when
@@ -814,15 +1061,15 @@ list_nodes_where_feature_flag_is_disabled(
                 maps:filter(
                   fun(_Node, FeatureStates) ->
                           case FeatureStates of
-                              %% The feature flag is known on this node, run
-                              %% the migration function only if it is
-                              %% disabled.
-                              #{FeatureName := Enabled} -> not Enabled;
-
-
-                              %% The feature flags is unknown on this node,
-                              %% don't run the migration function.
-                              _ -> false
+                              #{FeatureName := Enabled} ->
+                                  %% The feature flag is known on this node,
+                                  %% run the migration function only if it is
+                                  %% disabled.
+                                  not Enabled;
+                              _ ->
+                                  %% The feature flags is unknown on this
+                                  %% node, don't run the migration function.
+                                  false
                           end
                   end, StatesPerNode))),
     this_node_first(Nodes).
@@ -843,37 +1090,23 @@ this_node_first(Nodes) ->
       Ret :: term() | {error, term()}.
 
 rpc_call(Node, Module, Function, Args, Timeout) ->
-    case rpc:call(Node, Module, Function, Args, Timeout) of
-        {badrpc, {'EXIT',
-                  {undef,
-                   [{rabbit_feature_flags, Function, Args, []}
-                    | _]}}} ->
-            %% If rabbit_feature_flags:Function() is undefined
-            %% on the remote node, we consider it to be a 3.7.x
-            %% pre-feature-flags node.
-            %%
-            %% Theoretically, it could be an older version (3.6.x and
-            %% older). But the RabbitMQ version consistency check
-            %% (rabbit_misc:version_minor_equivalent/2) called from
-            %% rabbit_mnesia:check_rabbit_consistency/2 already blocked
-            %% this situation from happening before we reach this point.
-            ?LOG_DEBUG(
-               "Feature flags: ~ts:~ts~tp unavailable on node `~ts`: "
-               "assuming it is a RabbitMQ 3.7.x pre-feature-flags node",
-               [?MODULE, Function, Args, Node],
-               #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
-            {error, pre_feature_flags_rabbitmq};
-        {badrpc, Reason} = Error ->
+    try
+        erpc:call(Node, Module, Function, Args, Timeout)
+    catch
+        Class:Reason:Stacktrace ->
+            Message0 = erl_error:format_exception(Class, Reason, Stacktrace),
+            Message1 = lists:flatten(Message0),
+            Message2 = ["Feature flags:   " ++ Line ++ "~n"
+                        || Line <- string:lexemes(Message1, [$\n])],
+            Message3 = lists:flatten(Message2),
             ?LOG_ERROR(
                "Feature flags: error while running:~n"
                "Feature flags:   ~ts:~ts~tp~n"
-               "Feature flags: on node `~ts`:~n"
-               "Feature flags:   ~tp",
-               [?MODULE, Function, Args, Node, Reason],
+               "Feature flags: on node `~ts`:~n" ++
+               Message3,
+               [Module, Function, Args, Node],
                #{domain => ?RMQLOG_DOMAIN_FEAT_FLAGS}),
-            {error, Error};
-        Ret ->
-            Ret
+            {error, Reason}
     end.
 
 -spec rpc_calls(Nodes, Module, Function, Args, Timeout) -> Rets when
@@ -1088,23 +1321,11 @@ run_callback(Nodes, FeatureName, Command, Extra, Timeout) ->
             #{node() =>
               {error, {invalid_callback, FeatureName, Command, Invalid}}};
         _ ->
-            %% The migration fun API v1 is of the form:
-            %%   MigrationMod:MigrationFun(
-            %%     FeatureName, FeatureProps, Command).
-            %%
-            %% Also, the function is executed once on the calling node only.
-            %%
-            %% Only `enable' is supported by the v1 migration function.
+            %% No callbacks defined for this feature flag. Consider it a
+            %% success!
             Ret = case Command of
-                      enable ->
-                          Ret0 = rabbit_feature_flags:run_migration_fun(
-                                   FeatureName, FeatureProps, Command),
-                          case Ret0 of
-                              {error, no_migration_fun} -> ok;
-                              _                         -> Ret0
-                          end;
-                      _ ->
-                          ok
+                      enable      -> ok;
+                      post_enable -> ok
                   end,
             #{node() => Ret}
     end.

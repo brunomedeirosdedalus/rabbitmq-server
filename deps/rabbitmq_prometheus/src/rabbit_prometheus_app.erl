@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_prometheus_app).
@@ -47,7 +47,8 @@ start_configured_listener() ->
                           get_tls_listener()]
                  end,
     Listeners1 = maybe_disable_sendfile(Listeners0),
-    [start_listener(Listener) || Listener <- Listeners1].
+    [start_listener(Listener) || Listener <- Listeners1],
+    ok.
 
 maybe_disable_sendfile(Listeners) ->
     DisableSendfile = #{sendfile => false},

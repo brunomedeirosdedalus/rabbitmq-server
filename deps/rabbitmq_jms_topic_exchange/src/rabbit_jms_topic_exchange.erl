@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2012-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2012-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %% -----------------------------------------------------------------------------
 
 %% JMS on Rabbit Selector Exchange plugin
@@ -136,7 +136,7 @@ add_binding( Tx
   case {Tx, BindGen} of
     {transaction, {ok, BindFun}} ->
       add_binding_fun(XName, {{BindingKey, Dest}, BindFun});
-    {none, {error, _}} ->
+    {none, error} ->
       parsing_error(XName, Selector, Dest);
     _ ->
       ok
@@ -299,12 +299,14 @@ write_state_fun(XName, BFuns) ->
 %% E R R O R S
 
 % state error
+-spec exchange_state_corrupt_error(#resource{}) -> no_return().
 exchange_state_corrupt_error(#resource{name = XName}) ->
   rabbit_misc:protocol_error( internal_error
                             , "exchange named '~ts' has no saved state or incorrect saved state"
                             , [XName] ).
 
 % parsing error
+-spec parsing_error(#resource{}, term(), #resource{}) -> no_return().
 parsing_error(#resource{name = XName}, S, #resource{name = DestName}) ->
   rabbit_misc:protocol_error( precondition_failed
                             , "cannot parse selector '~tp' binding destination '~ts' to exchange '~ts'"

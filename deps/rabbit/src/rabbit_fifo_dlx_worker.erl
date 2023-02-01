@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 
 %% One rabbit_fifo_dlx_worker process exists per (source) quorum queue that has at-least-once dead lettering
 %% enabled. The rabbit_fifo_dlx_worker process is co-located on the quorum queue leader node.
@@ -151,8 +151,9 @@ handle_cast({queue_event, QRef, Evt},
             State1 = State0#state{queue_type_state = QTypeState1},
             State = handle_queue_actions(Actions, State1),
             {noreply, State};
-        eol ->
-            remove_queue(QRef, State0);
+        {eol, Actions} ->
+            State = handle_queue_actions(Actions, State0),
+            remove_queue(QRef, State);
         {protocol_error, _Type, _Reason, _Args} ->
             {noreply, State0}
     end;
@@ -177,10 +178,10 @@ handle_info({'DOWN', Ref, process, _, _},
     rabbit_log:debug("~ts terminating itself because leader of ~ts is down...",
                      [?MODULE, rabbit_misc:rs(QRef)]),
     supervisor:terminate_child(rabbit_fifo_dlx_sup, self());
-handle_info({'DOWN', _MRef, process, QPid, Reason},
+handle_info({{'DOWN', QName}, _MRef, process, QPid, Reason},
             #state{queue_type_state = QTypeState0} = State0) ->
     %% received from target classic queue
-    case rabbit_queue_type:handle_down(QPid, Reason, QTypeState0) of
+    case rabbit_queue_type:handle_down(QPid, QName, Reason, QTypeState0) of
         {ok, QTypeState, Actions} ->
             State = State0#state{queue_type_state = QTypeState},
             {noreply, handle_queue_actions(Actions, State)};
@@ -247,6 +248,10 @@ handle_queue_actions(Actions, State0) ->
               handle_rejected(QRef, MsgSeqs, S0);
           ({queue_down, _QRef}, S0) ->
               %% target classic queue is down, but not deleted
+              S0;
+          ({block, _QName}, S0) ->
+              S0;
+          ({unblock, _QName}, S0) ->
               S0
       end, State0, Actions).
 
@@ -533,14 +538,14 @@ maybe_cancel_timer(#state{timer = TRef,
                           pendings = Pendings} = State)
   when is_reference(TRef),
        map_size(Pendings) =:= 0 ->
-    erlang:cancel_timer(TRef, [{async, true}, {info, false}]),
+    _ = erlang:cancel_timer(TRef, [{async, true}, {info, false}]),
     State#state{timer = undefined};
 maybe_cancel_timer(State) ->
     State.
 
 cancel_timer(#state{timer = TRef} = State)
   when is_reference(TRef) ->
-    erlang:cancel_timer(TRef, [{async, true}, {info, false}]),
+    _ = erlang:cancel_timer(TRef, [{async, true}, {info, false}]),
     State#state{timer = undefined};
 cancel_timer(State) ->
     State.

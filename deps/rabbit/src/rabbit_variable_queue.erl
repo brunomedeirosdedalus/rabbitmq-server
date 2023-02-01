@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_variable_queue).
@@ -69,7 +69,7 @@
 %%   is stored in the per-vhost shared rabbit_msg_store
 %%
 %% When messages must be read from disk, message bodies will
-%% also be read from disk except if the message in stored
+%% also be read from disk except if the message is stored
 %% in the per-vhost shared rabbit_msg_store. In that case
 %% the message gets read before it needs to be sent to the
 %% consumer. Messages are read from rabbit_msg_store one
@@ -2317,7 +2317,8 @@ purge_pending_ack1(State = #vqstate { ram_pending_ack   = RPA,
 %% from.
 remove_vhost_msgs_by_id(MsgIdsByStore, MSCState) ->
     [ok = msg_store_remove(MSCState, IsPersistent, MsgIds)
-     || {IsPersistent, MsgIds} <- maps:to_list(MsgIdsByStore)].
+     || {IsPersistent, MsgIds} <- maps:to_list(MsgIdsByStore)],
+    ok.
 
 remove_transient_msgs_by_id(MsgIdsByStore, MSCState) ->
     case maps:find(false, MsgIdsByStore) of

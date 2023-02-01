@@ -1,4 +1,5 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
 
 http_file(
     name = "openssl-1.1.1g",
@@ -23,9 +24,16 @@ http_file(
 
 http_file(
     name = "otp_src_25_1",
-    downloaded_file_path = "OTP-25.1.2.tar.gz",
-    sha256 = "b9ae7becd3499aeac9f94f9379e2b1b4dced4855454fe7f200a6e3e1cf4fbc53",
-    urls = ["https://github.com/erlang/otp/archive/OTP-25.1.2.tar.gz"],
+    downloaded_file_path = "OTP-25.1.2.1.tar.gz",
+    sha256 = "79f8e31bb9ff7d43a920f207ef104d1106b2332fdbadf11241d714eacb6d8d1a",
+    urls = ["https://github.com/erlang/otp/archive/OTP-25.1.2.1.tar.gz"],
+)
+
+http_file(
+    name = "otp_src_25_2",
+    downloaded_file_path = "OTP-25.2.2.tar.gz",
+    sha256 = "535e535b2e90e71deca96c53f19710e6ebf3d4289b0a3116e7cf83b7e2c4bb7e",
+    urls = ["https://github.com/erlang/otp/archive/OTP-25.2.2.tar.gz"],
 )
 
 http_archive(
@@ -93,8 +101,13 @@ erlang_config(
         ),
         internal_erlang_from_github_release(
             name = "25_1",
-            sha256 = "5442dea694e7555d479d80bc81f1428020639c258f8e40b2052732d1cc95cca5",
-            version = "25.1.2",
+            sha256 = "1cd2fbe225a412009cda9b1fd9f3fff0293e75e3020daa48abf68721471e91eb",
+            version = "25.1.2.1",
+        ),
+        internal_erlang_from_github_release(
+            name = "25_2",
+            sha256 = "94d5b6b0495050c5ea78a10c02ba3bdb58ce537c2a8869957760e67ec02924bd",
+            version = "25.2.2",
         ),
         internal_erlang_from_http_archive(
             name = "git_master",
@@ -138,9 +151,12 @@ load(
 
 register_elixir_defaults()
 
-load("//:workspace_helpers.bzl", "rabbitmq_external_deps")
-
-rabbitmq_external_deps(rabbitmq_workspace = "@")
+new_git_repository(
+    name = "bats",
+    build_file = "@//:BUILD.bats",
+    remote = "https://github.com/sstephenson/bats",
+    tag = "v0.4.0",
+)
 
 load("//deps/amqp10_client:activemq.bzl", "activemq_archive")
 

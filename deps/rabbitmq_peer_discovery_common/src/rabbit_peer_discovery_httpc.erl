@@ -4,7 +4,7 @@
 %%
 %% The Initial Developer of the Original Code is AWeber Communications.
 %% Copyright (c) 2015-2016 AWeber Communications
-%% Copyright (c) 2016-2022 VMware, Inc. or its affiliates. All rights reserved.
+%% Copyright (c) 2016-2023 VMware, Inc. or its affiliates. All rights reserved.
 %%
 
 -module(rabbit_peer_discovery_httpc).
@@ -251,7 +251,7 @@ put(Scheme, Host, Port, Path, Args, Headers, Body) ->
 %% @doc Perform a HTTP PUT request
 %% @end
 %%
--spec put(Scheme, Host, Port, Path, Args, Headers, HttpOpts, Body) -> {ok, string()} | {error, any()} when
+-spec put(Scheme, Host, Port, Path, Args, Headers, HttpOpts, Body) -> {ok, term()} | {error, any()} when
   Scheme :: atom() | string(),
   Host :: string() | binary(),
   Port :: integer(),
@@ -425,19 +425,11 @@ decode_body(?CONTENT_JSON, Body) ->
 %% @doc Decode the response body and return a list
 %% @end
 %%
--spec parse_response({ok, integer(), string()} | {error, any()}) -> {ok, string()} | {error, any()}.
+-spec parse_response({ok, integer(), string()} | {error, any()}) -> {ok, term()} | {error, any()}.
 
 parse_response({error, Reason}) ->
   ?LOG_DEBUG("HTTP error ~tp", [Reason], #{domain => ?RMQLOG_DOMAIN_PEER_DIS}),
   {error, lists:flatten(io_lib:format("~tp", [Reason]))};
-
-parse_response({ok, 200, Body})  -> {ok, decode_body(?CONTENT_JSON, Body)};
-parse_response({ok, 201, Body})  -> {ok, decode_body(?CONTENT_JSON, Body)};
-parse_response({ok, 204, _})     -> {ok, []};
-parse_response({ok, Code, Body}) ->
-  ?LOG_DEBUG("HTTP Response (~tp) ~ts", [Code, Body], #{domain => ?RMQLOG_DOMAIN_PEER_DIS}),
-  {error, integer_to_list(Code)};
-
 parse_response({ok, {{_,200,_}, Headers, Body}}) ->
   {ok, decode_body(proplists:get_value("content-type", Headers, ?CONTENT_JSON), Body)};
 parse_response({ok,{{_,201,_}, Headers, Body}}) ->

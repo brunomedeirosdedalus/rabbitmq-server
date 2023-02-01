@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_auth_backend_http).
@@ -194,10 +194,12 @@ join_tags(Tags) ->
   Strings = [rabbit_data_coercion:to_list(T) || T <- Tags],
   string:join(Strings, " ").
 
+-spec parse_peeraddr(inet:ip_address()) -> string().
 parse_peeraddr(PeerAddr) ->
     handle_inet_ntoa_peeraddr(inet:ntoa(PeerAddr), PeerAddr).
 
+-spec handle_inet_ntoa_peeraddr({'error', term()} | string(), inet:ip_address()) -> string().
 handle_inet_ntoa_peeraddr({error, einval}, PeerAddr) ->
-    rabbit_data_coercion:to_list(PeerAddr);
+    rabbit_data_coercion:to_list(io_lib:format("~w", [PeerAddr]));
 handle_inet_ntoa_peeraddr(PeerAddrStr, _PeerAddr0) ->
     PeerAddrStr.

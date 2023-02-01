@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_mgmt_dispatcher).
@@ -32,7 +32,7 @@ build_routes(Ignore) ->
         [ApiRdrRte, CliRdrRte, MgmtRdrRte, StatsRdrRte1, StatsRdrRte2, LocalStaticRte],
     Routes1 = maybe_add_path_prefix(Routes0, Prefix),
     % NB: ensure the root routes are first
-    Routes2 = RootIdxRtes ++ Routes1,
+    Routes2 = RootIdxRtes ++ maybe_add_path_prefix([{"/login", rabbit_mgmt_login, []}], Prefix) ++ Routes1,
     [{'_', Routes2}].
 
 build_root_index_routes("", ManagementApp) ->
@@ -182,5 +182,7 @@ dispatcher() ->
      {"/auth",                                                 rabbit_mgmt_wm_auth, []},
      {"/auth/attempts/:node",                                  rabbit_mgmt_wm_auth_attempts, [all]},
      {"/auth/attempts/:node/source",                           rabbit_mgmt_wm_auth_attempts, [by_source]},
-     {"/login",                                                rabbit_mgmt_wm_login, []}
+     {"/login",                                                rabbit_mgmt_wm_login, []},
+     {"/config/effective",                                     rabbit_mgmt_wm_environment, []},
+     {"/auth/hash_password/:password",                         rabbit_mgmt_wm_hash_password, []}
     ].

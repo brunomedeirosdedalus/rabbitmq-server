@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_amqp1_0_session_sup).
@@ -20,11 +20,12 @@
 -export_type([start_link_args/0]).
 
 -type start_link_args() ::
-        {rabbit_types:protocol(), rabbit_net:socket(),
-         rabbit_channel:channel_number(), non_neg_integer(), pid(),
-         rabbit_access_control:username(), rabbit_types:vhost(), pid()}.
+        {'amqp10_framing', rabbit_net:socket(),
+         rabbit_channel:channel_number(), non_neg_integer() | 'unlimited', pid(),
+         #user{}, rabbit_types:vhost(), pid(),
+         {'rabbit_proxy_socket', rabbit_net:socket(), term()} | 'undefined'}.
 
--spec start_link(start_link_args()) -> {'ok', pid(), pid()}.
+-spec start_link(start_link_args()) -> {'ok', pid(), pid()} | {'error', term()}.
 
 %%----------------------------------------------------------------------------
 start_link({amqp10_framing, Sock, Channel, FrameMax, ReaderPid,

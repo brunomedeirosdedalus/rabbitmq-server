@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_vhost_sup_sup).
@@ -44,7 +44,7 @@ init([]) ->
     %% This assumes that a single vhost termination should not shut down nodes
     %% unless the operator opts in.
     RestartStrategy = vhost_restart_strategy(),
-    ets:new(?MODULE, [named_table, public, {keypos, #vhost_sup.vhost}]),
+    _ = ets:new(?MODULE, [named_table, public, {keypos, #vhost_sup.vhost}]),
     {ok, {{simple_one_for_one, 0, 5},
           [{rabbit_vhost, {rabbit_vhost_sup_wrapper, start_link, []},
             RestartStrategy, ?SUPERVISOR_WAIT, supervisor,
@@ -67,7 +67,7 @@ start_on_all_nodes(VHost) ->
     end.
 
 delete_on_all_nodes(VHost) ->
-    [ stop_and_delete_vhost(VHost, Node) || Node <- rabbit_nodes:all_running() ],
+    _ = [ stop_and_delete_vhost(VHost, Node) || Node <- rabbit_nodes:all_running() ],
     ok.
 
 stop_and_delete_vhost(VHost) ->

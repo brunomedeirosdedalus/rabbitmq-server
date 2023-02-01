@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_stream_queue_SUITE).
@@ -55,7 +55,9 @@ groups() ->
            leader_locator_balanced,
            leader_locator_balanced_maintenance,
            select_nodes_with_least_replicas,
-           recover_after_leader_and_coordinator_kill
+           recover_after_leader_and_coordinator_kill,
+           restart_stream,
+           rebalance
           ]},
      {cluster_size_3_1, [], [shrink_coordinator_cluster]},
      {cluster_size_3_2, [], [recover,
@@ -121,7 +123,8 @@ all_tests() ->
      purge,
      update_retention_policy,
      queue_info,
-     tracking_status
+     tracking_status,
+     restart_stream
     ].
 
 %% -------------------------------------------------------------------
@@ -357,9 +360,9 @@ declare_queue(Config) ->
     %% Test declare an existing queue
     ?assertEqual({'queue.declare_ok', Q, 0, 0},
                 declare(Ch, Q, [{<<"x-queue-type">>, longstr, <<"stream">>}])),
-    
+
     ?assertMatch([_], find_queue_info(Config, [])),
-    
+
     %% Test declare an existing queue with different arguments
     ?assertExit(_, declare(Ch, Q, [])),
     rabbit_ct_broker_helpers:rpc(Config, 0, ?MODULE, delete_testcase_queue, [Q]).
@@ -908,7 +911,7 @@ consume(Config) ->
             _ = amqp_channel:call(Ch1, #'basic.cancel'{consumer_tag = <<"ctag">>}),
             ok = amqp_channel:close(Ch1)
     after 5000 ->
-            exit(timeout)
+            ct:fail(timeout)
     end,
     rabbit_ct_broker_helpers:rpc(Config, 0, ?MODULE, delete_testcase_queue, [Q]).
 
@@ -1072,7 +1075,7 @@ consume_and_nack(Config) ->
                                                       multiple     = false,
                                                       requeue      = true}),
             %% Nack will throw a not implemented exception. As it is a cast operation,
-            %% we'll detect the conneciton/channel closure on the next call. 
+            %% we'll detect the conneciton/channel closure on the next call.
             %% Let's try to redeclare and see what happens
             ?assertExit({{shutdown, {connection_closing, {server_initiated_close, 540, _}}}, _},
                         declare(Ch1, Q, [{<<"x-queue-type">>, longstr, <<"stream">>}]))
@@ -1296,7 +1299,7 @@ consume_and_reject(Config) ->
             ok = amqp_channel:cast(Ch1, #'basic.reject'{delivery_tag = DeliveryTag,
                                                       requeue      = true}),
             %% Reject will throw a not implemented exception. As it is a cast operation,
-            %% we'll detect the conneciton/channel closure on the next call. 
+            %% we'll detect the conneciton/channel closure on the next call.
             %% Let's try to redeclare and see what happens
             ?assertExit({{shutdown, {connection_closing, {server_initiated_close, 540, _}}}, _},
                         declare(Ch1, Q, [{<<"x-queue-type">>, longstr, <<"stream">>}]))
@@ -1353,6 +1356,37 @@ tracking_status(Config) ->
                   ]],
                  rabbit_ct_broker_helpers:rpc(Config, Server, rabbit_stream_queue, ?FUNCTION_NAME, [Vhost, Q])),
     rabbit_ct_broker_helpers:rpc(Config, Server, ?MODULE, delete_testcase_queue, [Q]).
+
+restart_stream(Config) ->
+    case rabbit_ct_broker_helpers:enable_feature_flag(Config, restart_stream) of
+        ok ->
+            [Server | _] = rabbit_ct_broker_helpers:get_node_configs(Config, nodename),
+
+            Ch = rabbit_ct_client_helpers:open_channel(Config, Server),
+            Q = ?config(queue_name, Config),
+            ?assertEqual({'queue.declare_ok', Q, 0, 0},
+                         declare(Ch, Q, [{<<"x-queue-type">>, longstr, <<"stream">>}])),
+
+            publish_confirm(Ch, Q, [<<"msg">>]),
+            Vhost = ?config(rmq_vhost, Config),
+            QName = #resource{virtual_host = Vhost,
+                              kind = queue,
+                              name = Q},
+            %% restart the stream
+            ?assertMatch({ok, _},
+                         rabbit_ct_broker_helpers:rpc(Config, Server,
+                                                      rabbit_stream_coordinator,
+                                                      ?FUNCTION_NAME, [QName])),
+
+            publish_confirm(Ch, Q, [<<"msg2">>]),
+            rabbit_ct_broker_helpers:rpc(Config, Server, ?MODULE, delete_testcase_queue, [Q]),
+            ok;
+        _ ->
+            ct:pal("skipping test ~s as feature flag `restart_stream` not supported",
+                   [?FUNCTION_NAME]),
+            ok
+    end.
+
 
 consume_from_last(Config) ->
     [Server | _] = rabbit_ct_broker_helpers:get_node_configs(Config, nodename),
@@ -1676,7 +1710,12 @@ max_length_bytes(Config) ->
 
     Payload = << <<"1">> || _ <- lists:seq(1, 100) >>,
 
-    publish_confirm(Ch, Q, [Payload || _ <- lists:seq(1, 500)]), %% 100 bytes/msg * 500 = 50000 bytes
+    %% 100 bytes/msg * 500 = 50000 bytes
+    publish_confirm(Ch, Q, [Payload || _ <- lists:seq(1, 100)]),
+    publish_confirm(Ch, Q, [Payload || _ <- lists:seq(1, 100)]),
+    publish_confirm(Ch, Q, [Payload || _ <- lists:seq(1, 100)]),
+    publish_confirm(Ch, Q, [Payload || _ <- lists:seq(1, 100)]),
+    publish_confirm(Ch, Q, [Payload || _ <- lists:seq(1, 100)]),
     ensure_retention_applied(Config, Server),
 
     %% We don't yet have reliable metrics, as the committed offset doesn't work
@@ -2479,3 +2518,62 @@ ensure_retention_applied(Config, Server) ->
     %% Let's force a call on the retention gen_server, any pending retention would have been
     %% processed when this call returns.
     rabbit_ct_broker_helpers:rpc(Config, Server, gen_server, call, [osiris_retention, test]).
+
+rebalance(Config) ->
+    case rabbit_ct_broker_helpers:enable_feature_flag(Config, restart_stream) of
+        ok ->
+            rebalance0(Config);
+        _ ->
+            ct:pal("skipping test ~s as feature flag `restart_stream` not supported",
+                   [?FUNCTION_NAME]),
+            ok
+    end.
+
+rebalance0(Config) ->
+    [Server0 | _] =
+        rabbit_ct_broker_helpers:get_node_configs(Config, nodename),
+    Ch = rabbit_ct_client_helpers:open_channel(Config, Server0),
+
+    Q1 = <<"st1">>,
+    Q2 = <<"st2">>,
+    Q3 = <<"st3">>,
+    Q4 = <<"st4">>,
+    Q5 = <<"st5">>,
+
+    ?assertEqual({'queue.declare_ok', Q1, 0, 0},
+                 declare(Ch, Q1, [{<<"x-queue-type">>, longstr, <<"stream">>},
+                                 {<<"x-initial-cluster-size">>, long, 3}])),
+    ?assertEqual({'queue.declare_ok', Q2, 0, 0},
+                 declare(Ch, Q2, [{<<"x-queue-type">>, longstr, <<"stream">>},
+                                 {<<"x-initial-cluster-size">>, long, 3}])),
+    ?assertEqual({'queue.declare_ok', Q3, 0, 0},
+                 declare(Ch, Q3, [{<<"x-queue-type">>, longstr, <<"stream">>},
+                                 {<<"x-initial-cluster-size">>, long, 3}])),
+    ?assertEqual({'queue.declare_ok', Q4, 0, 0},
+                 declare(Ch, Q4, [{<<"x-queue-type">>, longstr, <<"stream">>},
+                                 {<<"x-initial-cluster-size">>, long, 3}])),
+    ?assertEqual({'queue.declare_ok', Q5, 0, 0},
+                 declare(Ch, Q5, [{<<"x-queue-type">>, longstr, <<"stream">>},
+                                 {<<"x-initial-cluster-size">>, long, 3}])),
+
+    NumMsgs = 100,
+    Data = crypto:strong_rand_bytes(100),
+    #'confirm.select_ok'{} = amqp_channel:call(Ch, #'confirm.select'{}),
+    amqp_channel:register_confirm_handler(Ch, self()),
+    [publish(Ch, Q1, Data) || _ <- lists:seq(1, NumMsgs)],
+    [publish(Ch, Q2, Data) || _ <- lists:seq(1, NumMsgs)],
+    [publish(Ch, Q3, Data) || _ <- lists:seq(1, NumMsgs)],
+    [publish(Ch, Q4, Data) || _ <- lists:seq(1, NumMsgs)],
+    [publish(Ch, Q5, Data) || _ <- lists:seq(1, NumMsgs)],
+
+    %% Check that we have at most 2 streams per node
+    ?awaitMatch(true,
+                begin
+                    {ok, Summary} = rpc:call(Server0, rabbit_amqqueue, rebalance, [stream, ".*", ".*"]),
+                    lists:all(fun(NodeData) ->
+                                      lists:all(fun({_, V}) when is_integer(V) -> V =< 2;
+                                                   (_) -> true end,
+                                                NodeData)
+                              end, Summary)
+                end, 10000),
+    ok.

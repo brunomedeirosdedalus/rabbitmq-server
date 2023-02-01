@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2020-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2020-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_stream_connections_mgmt).
@@ -37,8 +37,7 @@ web_ui() ->
                                   "and re-enable the rabbitmq_stream_management "
                                   "plugin. ",
                                "See https://www.rabbitmq.com/feature-flags.html "
-                               "to learn more",
-                               []),
+                               "to learn more"),
             []
     end.
 

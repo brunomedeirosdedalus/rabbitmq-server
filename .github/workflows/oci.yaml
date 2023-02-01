@@ -28,7 +28,7 @@ jobs:
   # * main-otp-max (image OTP 26)
 
   build-publish-dev-bazel:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
@@ -36,7 +36,7 @@ jobs:
           - image_tag_suffix: otp-min-bazel
             otp_version_id: 25_0
           - image_tag_suffix: otp-max-bazel
-            otp_version_id: 25_1
+            otp_version_id: 25_2
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -46,7 +46,7 @@ jobs:
           sed -i"_orig" -E '/APP_VERSION/ s/3\.[0-9]+\.[0-9]+/${{ github.event.pull_request.head.sha || github.sha }}/' rabbitmq.bzl
 
       - name: Mount Bazel Cache
-        uses: actions/cache@v3.0.11
+        uses: actions/cache@v3.2.4
         with:
           path: "/home/runner/repo-cache/"
           key: repo-cache

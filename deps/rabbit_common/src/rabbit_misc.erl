@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_misc).
@@ -62,7 +62,7 @@
 -export([pget/2, pget/3, pupdate/3, pget_or_die/2, pmerge/3, pset/3, plmerge/2]).
 -export([format_message_queue/2]).
 -export([append_rpc_all_nodes/4, append_rpc_all_nodes/5]).
--export([os_cmd/1]).
+-export([os_cmd/1, pwsh_cmd/1, win32_cmd/2]).
 -export([is_os_process_alive/1]).
 -export([version/0, otp_release/0, platform_and_version/0, otp_system_version/0,
          rabbitmq_and_erlang_versions/0, which_applications/0]).
@@ -84,6 +84,7 @@
 -export([raw_read_file/1]).
 -export([find_child/2]).
 -export([is_regular_file/1]).
+-export([pipeline/3]).
 
 %% Horrible macro to use in guards
 -define(IS_BENIGN_EXIT(R),
@@ -1156,6 +1157,14 @@ os_cmd(Command) ->
             end
     end.
 
+pwsh_cmd(Command) ->
+    case os:type() of
+        {win32, _} ->
+            do_pwsh_cmd(Command);
+        _ ->
+            {error, invalid_os_type}
+    end.
+
 is_os_process_alive(Pid) ->
     with_os([{unix, fun () ->
                             run_ps(Pid) =:= 0
@@ -1164,26 +1173,17 @@ is_os_process_alive(Pid) ->
                              PidS = rabbit_data_coercion:to_list(Pid),
                              case os:find_executable("tasklist.exe") of
                                  false ->
-                                     Cmd =
-                                     format(
-                                       "powershell.exe -NoLogo -NoProfile -NonInteractive -Command "
-                                       "\"(Get-Process -Id ~ts).ProcessName\"",
-                                       [PidS]),
-                                     Res =
-                                     os_cmd(Cmd ++ " 2>&1") -- [$\r, $\n],
+                                     Cmd = format("(Get-Process -Id ~ts).ProcessName", [PidS]),
+                                     {ok, [Res]} = pwsh_cmd(Cmd),
                                      case Res of
                                          "erl"  -> true;
                                          "werl" -> true;
                                          _      -> false
                                      end;
-                                 _ ->
-                                     Cmd =
-                                     "tasklist /nh /fi "
-                                     "\"pid eq " ++ PidS ++ "\"",
-                                     Res = os_cmd(Cmd ++ " 2>&1"),
-                                     match =:= re:run(Res,
-                                                      "erl\\.exe",
-                                                      [{capture, none}])
+                                 TasklistExe ->
+                                     Args = ["/nh", "/fi", "pid eq " ++ PidS],
+                                     {ok, [Res]} = win32_cmd(TasklistExe, Args),
+                                     match =:= re:run(Res, "erl\\.exe", [{capture, none}])
                              end
                      end}]).
 
@@ -1471,4 +1471,127 @@ whereis_name(Name) ->
     end.
 
 %% End copypasta from gen_server2.erl
+%% -------------------------------------------------------------------------
+%% This will execute a Powershell command without an intervening cmd.exe
+%% process. Output lines can't exceed 512 bytes.
+%%
+%% Inspired by os:cmd/1 in lib/kernel/src/os.erl
+do_pwsh_cmd(Command) ->
+    Pwsh = find_powershell(),
+    Args = ["-NoLogo",
+            "-NonInteractive",
+            "-NoProfile",
+            "-InputFormat", "Text",
+            "-OutputFormat", "Text",
+            "-Command", Command],
+    win32_cmd(Pwsh, Args).
+
+win32_cmd(Exe, Args) ->
+    SystemRootDir = os:getenv("SystemRoot", "/"),
+    % Note: 'hide' must be used or this will not work!
+    A0 = [exit_status, stderr_to_stdout, in, hide,
+          {cd, SystemRootDir}, {line, 512}, {arg0, Exe}, {args, Args}],
+    Port = erlang:open_port({spawn_executable, Exe}, A0),
+    MonRef = erlang:monitor(port, Port),
+    Result = win32_cmd_receive(Port, MonRef, []),
+    true = erlang:demonitor(MonRef, [flush]),
+    Result.
+
+win32_cmd_receive(Port, MonRef, Acc0) ->
+    receive
+        {Port, {exit_status, 0}} ->
+            win32_cmd_receive_finish(Port, MonRef),
+            {ok, lists:reverse(Acc0)};
+        {Port, {exit_status, Status}} ->
+            win32_cmd_receive_finish(Port, MonRef),
+            {error, {exit_status, Status}};
+        {Port, {data, {eol, Data0}}} ->
+            Data1 = string:trim(Data0),
+            Acc1 = case Data1 of
+                       [] -> Acc0; % Note: skip empty lines in output
+                       Data2 -> [Data2 | Acc0]
+                   end,
+            win32_cmd_receive(Port, MonRef, Acc1);
+        {'DOWN', MonRef, _, _, _} ->
+            flush_exit(Port),
+            {error, nodata}
+    after 5000 ->
+              win32_cmd_receive_finish(Port, MonRef),
+              {error, timeout}
+    end.
+
+win32_cmd_receive_finish(Port, MonRef) ->
+    catch erlang:port_close(Port),
+    flush_until_down(Port, MonRef).
+
+flush_until_down(Port, MonRef) ->
+    receive
+        {Port, {data, _Bytes}} ->
+            flush_until_down(Port, MonRef);
+        {'DOWN', MonRef, _, _, _} ->
+            flush_exit(Port)
+    after 500 ->
+              flush_exit(Port)
+    end.
+
+flush_exit(Port) ->
+    receive
+        {'EXIT', Port, _} -> ok
+    after 0 ->
+              ok
+    end.
+
+find_powershell() ->
+    case os:find_executable("pwsh.exe") of
+        false ->
+            case os:find_executable("powershell.exe") of
+                false ->
+                    "powershell.exe";
+                PowershellExe ->
+                    PowershellExe
+            end;
+        PwshExe ->
+            PwshExe
+    end.
+
+%% -------------------------------------------------------------------------
+%% Begin copy from
+%% https://github.com/emqx/emqx/blob/cffdcb42843d48bf99d8bd13695bc73149c98a23/apps/emqx/src/emqx_misc.erl#L141-L157
+
+%%--------------------------------------------------------------------
+%% Copyright (c) 2017-2022 EMQ Technologies Co., Ltd. All Rights Reserved.
+%%
+%% Licensed under the Apache License, Version 2.0 (the "License");
+%% you may not use this file except in compliance with the License.
+%% You may obtain a copy of the License at
+%%
+%%     http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing, software
+%% distributed under the License is distributed on an "AS IS" BASIS,
+%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%% See the License for the specific language governing permissions and
+%% limitations under the License.
+%%--------------------------------------------------------------------
+
+pipeline([], Input, State) ->
+    {ok, Input, State};
+pipeline([Fun | More], Input, State) ->
+    case apply_fun(Fun, Input, State) of
+        ok -> pipeline(More, Input, State);
+        {ok, NState} -> pipeline(More, Input, NState);
+        {ok, Output, NState} -> pipeline(More, Output, NState);
+        {error, Reason} -> {error, Reason, State};
+        {error, Reason, NState} -> {error, Reason, NState}
+    end.
+
+-compile({inline, [apply_fun/3]}).
+apply_fun(Fun, Input, State) ->
+    case erlang:fun_info(Fun, arity) of
+        {arity, 1} -> Fun(Input);
+        {arity, 2} -> Fun(Input, State)
+    end.
+
+%% End copy from
+%% https://github.com/emqx/emqx/blob/cffdcb42843d48bf99d8bd13695bc73149c98a23/apps/emqx/src/emqx_misc.erl#L141-L157
 %% -------------------------------------------------------------------------

@@ -2,12 +2,16 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_shovel_mgmt_util).
 
 -export([status/2]).
+
+-ifdef(TEST).
+-export([status/1]).
+-endif.
 
 -import(rabbit_misc, [pget/2]).
 
@@ -53,7 +57,8 @@ format_info(starting) ->
     [{state, starting}];
 
 format_info({running, Props}) ->
-    [{state, running}] ++ Props;
+    BlockedStatus = proplists:get_value(blocked_status, Props, running),
+    [{state, BlockedStatus}] ++ Props;
 
 format_info({terminated, Reason}) ->
     [{state,  terminated},

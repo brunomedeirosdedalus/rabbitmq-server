@@ -67,6 +67,8 @@ plt(
     name = "deps_plt",
     for_target = ":erlang_app",
     plt = "//:base_plt",
+    apps = EXTRA_APPS,
+    deps = BUILD_DEPS,
 )
 
 dialyze(

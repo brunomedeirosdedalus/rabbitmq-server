@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_amqp1_0_session_process).
@@ -416,9 +416,7 @@ run_buffer1(WriterPid, BCh, Session, Buffer) ->
                     rabbit_amqp1_0_writer:send_command(
                       WriterPid,
                       rabbit_amqp1_0_session:flow_fields(Flow, Session1)),
-                    run_buffer1(WriterPid, BCh, Session1, Buffer);
-                {none, Session1} ->
-                    {Session1, Buffer}
+                    run_buffer1(WriterPid, BCh, Session1, Buffer)
             end;
         _ ->
             {Session, Buffer}

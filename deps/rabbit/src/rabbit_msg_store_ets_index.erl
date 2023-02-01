@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_msg_store_ets_index).
@@ -18,18 +18,21 @@
 -define(MSG_LOC_NAME, rabbit_msg_store_ets_index).
 -define(FILENAME, "msg_store_index.ets").
 
--record(state, { table, dir }).
+-record(state,
+        {table,
+         %% Stored as binary() as opposed to file:filename() to save memory.
+         dir :: binary()}).
 
 new(Dir) ->
-    file:delete(filename:join(Dir, ?FILENAME)),
+    _ = file:delete(filename:join(Dir, ?FILENAME)),
     Tid = ets:new(?MSG_LOC_NAME, [set, public, {keypos, #msg_location.msg_id}]),
-    #state { table = Tid, dir = Dir }.
+    #state { table = Tid, dir = rabbit_file:filename_to_binary(Dir) }.
 
 recover(Dir) ->
     Path = filename:join(Dir, ?FILENAME),
     case ets:file2tab(Path) of
-        {ok, Tid}  -> file:delete(Path),
-                      {ok, #state { table = Tid, dir = Dir }};
+        {ok, Tid}  -> _ = file:delete(Path),
+                      {ok, #state { table = Tid, dir = rabbit_file:filename_to_binary(Dir) }};
         Error      -> Error
     end.
 
@@ -64,7 +67,8 @@ clean_up_temporary_reference_count_entries_without_file(State) ->
     ets:select_delete(State #state.table, [{MatchHead, [], [true]}]),
     ok.
 
-terminate(#state { table = MsgLocations, dir = Dir }) ->
+terminate(#state { table = MsgLocations, dir = DirBin }) ->
+    Dir = rabbit_file:binary_to_filename(DirBin),
     case ets:tab2file(MsgLocations, filename:join(Dir, ?FILENAME),
                       [{extended_info, [object_count]}]) of
         ok           -> ok;

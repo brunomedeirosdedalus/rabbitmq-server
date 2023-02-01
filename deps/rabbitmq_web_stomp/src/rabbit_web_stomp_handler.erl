@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_web_stomp_handler).
@@ -227,8 +227,13 @@ websocket_info({'EXIT', From, Reason},
     {stop, _Reason, ProcState} ->
         stop(State#state{ proc_state = ProcState });
     unknown_exit ->
-        stop(State)
+        %% Allow the server to send remaining error messages
+        self() ! close_websocket,
+        {ok, State}
   end;
+websocket_info(close_websocket, State) ->
+    stop(State);
+
 %%----------------------------------------------------------------------------
 
 websocket_info(emit_stats, State) ->
@@ -291,7 +296,9 @@ handle_data1(Bytes, State = #state{proc_state  = ProcState,
                                      proc_state  = ProcState1,
                                      connection  = ConnPid });
                 {stop, _Reason, ProcState1} ->
-                    stop(State#state{ proc_state = ProcState1 })
+                    %% do not exit here immediately, because we need to wait for messages eventually enqueued by process_request
+                    self() ! close_websocket,
+                    {ok, State#state{ proc_state = ProcState1 }}
             end;
         Other ->
             Other

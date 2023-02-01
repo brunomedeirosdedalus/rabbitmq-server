@@ -112,7 +112,7 @@ var ALL_COLUMNS =
                   ['channels',       'Channels',       true],
                   ['channel_max',    'Channel max',    false],
                   ['frame_max',      'Frame max',      false],
-                  ['auth_mechanism', 'Auth mechanism', false],
+                  ['auth_mechanism', 'SASL auth mechanism', false],
                   ['client',         'Client',         false]],
       'Network': [['from_client',  'From client',  true],
                   ['to_client',    'To client',    true],
@@ -120,7 +120,8 @@ var ALL_COLUMNS =
                   ['connected_at', 'Connected at', false]]},
 
      'vhosts':
-     {'Overview': [['cluster-state',   'Cluster state',  false],
+     {'Overview': [['default-queue-type', 'Default queue type', false],
+                   ['cluster-state',   'Cluster state',  false],
                    ['description',   'Description',  false],
                    ['tags',   'Tags',  false]],
       'Messages': [['msgs-ready',      'Ready',          true],
@@ -685,7 +686,7 @@ function setup_global_vars() {
     }
     vhosts_interesting = JSON.parse(sync_get('/vhosts')).length > 1;
 
-    queue_type = "classic";
+    queue_type = "default";
     current_vhost = get_pref('vhost');
     exchange_types = overview.exchange_types;
 

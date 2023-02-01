@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2011-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2011-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(unit_config_value_encryption_SUITE).
@@ -33,12 +33,14 @@ groups() ->
         ]}
     ].
 
-init_per_testcase(TC, Config) when TC =:= decrypt_start_app;
-                                   TC =:= decrypt_start_app_file;
-                                   TC =:= decrypt_start_app_undefined;
-                                   TC =:= decrypt_start_app_wrong_passphrase ->
+init_per_suite(Config) ->
     application:set_env(rabbit, feature_flags_file, "", [{persistent, true}]),
-    Config;
+    {ok, _Pid} = rabbit_ff_controller:start(),
+    Config.
+
+end_per_suite(_Config) ->
+    ok.
+
 init_per_testcase(_Testcase, Config) ->
     Config.
 

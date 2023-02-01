@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2007-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2007-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 
@@ -43,7 +43,7 @@
 %% import
 -export([import_raw/1, import_raw/2, import_parsed/1, import_parsed/2,
          import_parsed_with_hashing/1, import_parsed_with_hashing/2,
-         apply_defs/2, apply_defs/3, apply_defs/4, apply_defs/5,
+         apply_defs/2, apply_defs/3,
          should_skip_if_unchanged/0]).
 
 -export([all_definitions/0]).
@@ -465,53 +465,16 @@ apply_defs(Map, ActingUser, SuccessFun, VHost) when is_function(SuccessFun); is_
         rabbit_runtime:gc_all_processes()
     end.
 
--spec apply_defs(Map :: #{atom() => any()},
-                ActingUser :: rabbit_types:username(),
-                SuccessFun :: fun(() -> 'ok'),
-                ErrorFun :: fun((any()) -> 'ok'),
-                VHost :: vhost:name()) -> 'ok' | {error, term()}.
-
-apply_defs(Map, ActingUser, SuccessFun, ErrorFun, VHost) ->
-    rabbit_log:info("Asked to import definitions for a virtual host. Virtual host: ~tp, acting user: ~tp",
-                    [VHost, ActingUser]),
-    try
-        validate_limits(Map, VHost),
-
-        concurrent_for_all(bindings,   ActingUser, Map, VHost, fun add_binding/3),
-        sequential_for_all(parameters, ActingUser, Map, VHost, fun add_parameter/3),
-        %% importing policies concurrently can be unsafe as queues will be getting
-        %% potentially out of order notifications of applicable policy changes
-        sequential_for_all(policies,   ActingUser, Map, VHost, fun add_policy/3),
-
-        rabbit_nodes:if_reached_target_cluster_size(
-            fun() ->
-                concurrent_for_all(queues,     ActingUser, Map, VHost, fun add_queue/3),
-                concurrent_for_all(bindings,   ActingUser, Map, VHost, fun add_binding/3)
-            end,
-
-            fun() ->
-                rabbit_log:info("There are fewer than target cluster size (~b) nodes online,"
-                                " skipping queue and binding import from definitions",
-                                [rabbit_nodes:target_cluster_size_hint()])
-            end
-        ),
-
-        SuccessFun()
-    catch {error, E} -> ErrorFun(format(E));
-          exit:E     -> ErrorFun(format(E))
-    after
-        rabbit_runtime:gc_all_processes()
-    end.
-
 sequential_for_all(Category, ActingUser, Definitions, Fun) ->
     try
-        sequential_for_all0(Category, ActingUser, Definitions, Fun)
+        sequential_for_all0(Category, ActingUser, Definitions, Fun),
+        ok
     after
         rabbit_runtime:gc_all_processes()
     end.
 
 sequential_for_all0(Category, ActingUser, Definitions, Fun) ->
-    case maps:get(rabbit_data_coercion:to_atom(Category), Definitions, undefined) of
+    _ = case maps:get(rabbit_data_coercion:to_atom(Category), Definitions, undefined) of
         undefined -> ok;
         List      ->
             case length(List) of
@@ -522,20 +485,23 @@ sequential_for_all0(Category, ActingUser, Definitions, Fun) ->
                  %% keys are expected to be atoms
                  Fun(atomize_keys(M), ActingUser)
              end || M <- List, is_map(M)]
-    end.
+    end,
+    ok.
 
 sequential_for_all(Name, ActingUser, Definitions, VHost, Fun) ->
     try
-        sequential_for_all0(Name, ActingUser, Definitions, VHost, Fun)
+        sequential_for_all0(Name, ActingUser, Definitions, VHost, Fun),
+        ok
     after
         rabbit_runtime:gc_all_processes()
     end.
 
 sequential_for_all0(Name, ActingUser, Definitions, VHost, Fun) ->
-    case maps:get(rabbit_data_coercion:to_atom(Name), Definitions, undefined) of
+    _ = case maps:get(rabbit_data_coercion:to_atom(Name), Definitions, undefined) of
         undefined -> ok;
-        List      -> [Fun(VHost, atomize_keys(M), ActingUser) || M <- List, is_map(M)]
-    end.
+        List      -> _ = [Fun(VHost, atomize_keys(M), ActingUser) || M <- List, is_map(M)]
+    end,
+    ok.
 
 concurrent_for_all(Category, ActingUser, Definitions, Fun) ->
     try
@@ -555,7 +521,8 @@ concurrent_for_all0(Category, ActingUser, Definitions, Fun) ->
             WorkPoolFun = fun(M) ->
                                   Fun(atomize_keys(M), ActingUser)
                           end,
-            do_concurrent_for_all(List, WorkPoolFun)
+            do_concurrent_for_all(List, WorkPoolFun),
+            ok
     end.
 
 concurrent_for_all(Name, ActingUser, Definitions, VHost, Fun) ->
@@ -583,7 +550,7 @@ do_concurrent_for_all(List, WorkPoolFun) ->
          worker_pool:submit_async(
            ?IMPORT_WORK_POOL,
            fun() ->
-                   try
+                   _ = try
                        WorkPoolFun(M)
                    catch {error, E} -> gatherer:in(Gatherer, {error, E});
                          _:E        -> gatherer:in(Gatherer, {error, E})
@@ -729,12 +696,11 @@ add_queue_int(_Queue, R = #resource{kind = queue,
     Name = R#resource.name,
     rabbit_log:warning("Skipping import of a queue whose name begins with 'amq.', "
                        "name: ~ts, acting user: ~ts", [Name, ActingUser]);
-add_queue_int(Queue, Name, ActingUser) ->
+add_queue_int(Queue, Name = #resource{virtual_host = VHostName}, ActingUser) ->
     case rabbit_amqqueue:exists(Name) of
         true ->
             ok;
         false ->
-            VHostName = maps:get(vhost, Queue, rabbit_vhost:default_name()),
             AutoDelete = maps:get(auto_delete, Queue, false),
             DurableDeclare = maps:get(durable, Queue, true),
             ExclusiveDeclare = maps:get(exclusive, Queue, false),

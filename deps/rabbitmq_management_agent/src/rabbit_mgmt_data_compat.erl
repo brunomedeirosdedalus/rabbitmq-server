@@ -2,7 +2,7 @@
 %% License, v. 2.0. If a copy of the MPL was not distributed with this
 %% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%
-%% Copyright (c) 2018-2022 VMware, Inc. or its affiliates.  All rights reserved.
+%% Copyright (c) 2018-2023 VMware, Inc. or its affiliates.  All rights reserved.
 %%
 
 -module(rabbit_mgmt_data_compat).
@@ -68,7 +68,7 @@ drop_drop_unroutable_metric(Slide) ->
               Value
       end, Slide).
 
-fill_consumer_active_fields(ConsumersStats) ->
+fill_consumer_active_fields(ConsumersStatsList) ->
     [case proplists:get_value(active, ConsumerStats) of
          undefined ->
              [{active, true},
@@ -77,4 +77,4 @@ fill_consumer_active_fields(ConsumersStats) ->
          _ ->
              ConsumerStats
      end
-     || ConsumerStats <- ConsumersStats].
+     || ConsumerStats <- ConsumersStatsList].
