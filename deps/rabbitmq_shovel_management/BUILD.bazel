@@ -107,6 +107,10 @@ rabbitmq_suite(
     ],
 )
 
+rabbitmq_suite(
+    name = "rabbit_shovel_mgmt_util_SUITE",
+)
+
 assert_suites()
 
 alias(

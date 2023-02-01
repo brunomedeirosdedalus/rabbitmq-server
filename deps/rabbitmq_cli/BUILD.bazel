@@ -22,12 +22,6 @@ rabbitmqctl(
     ],
 )
 
-alias(
-    name = "erlang_app",
-    actual = ":rabbitmqctl",
-    visibility = ["//visibility:public"],
-)
-
 select_file(
     name = "fetched_srcs",
     srcs = ":rabbitmqctl",

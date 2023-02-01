@@ -666,6 +666,10 @@ rabbitmq_integration_suite(
 )
 
 rabbitmq_suite(
+    name = "rabbit_cuttlefish_SUITE",
+)
+
+rabbitmq_suite(
     name = "rabbit_fifo_int_SUITE",
     size = "medium",
     deps = [
@@ -829,6 +833,10 @@ rabbitmq_integration_suite(
 rabbitmq_integration_suite(
     name = "topic_permission_SUITE",
     size = "medium",
+)
+
+rabbitmq_suite(
+    name = "unicode_SUITE",
 )
 
 rabbitmq_integration_suite(

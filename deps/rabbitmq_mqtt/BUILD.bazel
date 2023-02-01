@@ -174,7 +174,15 @@ rabbitmq_integration_suite(
 )
 
 rabbitmq_integration_suite(
+    name = "config_SUITE",
+)
+
+rabbitmq_integration_suite(
     name = "config_schema_SUITE",
+)
+
+rabbitmq_integration_suite(
+    name = "ff_SUITE",
 )
 
 rabbitmq_integration_suite(
@@ -212,6 +220,10 @@ rabbitmq_integration_suite(
     runtime_deps = [
         "@emqtt//:erlang_app",
     ],
+)
+
+rabbitmq_suite(
+    name = "shared_SUITE",
 )
 
 rabbitmq_suite(

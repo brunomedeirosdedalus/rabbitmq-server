@@ -10,6 +10,7 @@ load(
 
 # gazelle:erlang_generate_beam_files_macro false
 # gazelle:erlang_always_generate_test_beam_files
+# gazelle:erlang_skip_rules assert_suites,xref,plt,dialyze
 
 erlang_bytecode(
     name = "ebin_my_plugin_beam",
@@ -101,24 +102,4 @@ alias(
     name = "my_plugin",
     actual = ":erlang_app",
     visibility = ["//visibility:public"],
-)
-
-assert_suites()
-
-xref(
-    name = "xref",
-    target = ":erlang_app",
-)
-
-plt(
-    name = "deps_plt",
-    for_target = ":erlang_app",
-    plt = "//:base_plt",
-)
-
-dialyze(
-    name = "dialyze",
-    dialyzer_opts = RABBITMQ_DIALYZER_OPTS,
-    plt = ":deps_plt",
-    target = ":erlang_app",
 )
