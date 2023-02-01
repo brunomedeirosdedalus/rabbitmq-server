@@ -3,6 +3,7 @@ load("@rules_erlang//:xref2.bzl", "xref")
 load("@rules_erlang//:dialyze.bzl", "dialyze", "plt")
 load(
     "//:rabbitmq.bzl",
+    "RABBITMQ_DIALYZER_OPTS",
     "assert_suites",
     "broker_for_integration_suites",
     "rabbitmq_app",
@@ -90,6 +91,7 @@ plt(
 
 dialyze(
     name = "dialyze",
+    dialyzer_opts = RABBITMQ_DIALYZER_OPTS,
     plt = ":deps_plt",
     target = ":erlang_app",
 )

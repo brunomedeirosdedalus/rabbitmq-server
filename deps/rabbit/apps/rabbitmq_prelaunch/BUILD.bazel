@@ -4,6 +4,7 @@ load("@rules_erlang//:dialyze.bzl", "dialyze", "plt")
 load(
     "//:rabbitmq.bzl",
     "APP_VERSION",
+    "RABBITMQ_DIALYZER_OPTS",
     "assert_suites",
     "rabbitmq_app",
     "rabbitmq_suite",
@@ -21,15 +22,6 @@ APP_NAME = "rabbitmq_prelaunch"
 APP_DESCRIPTION = "RabbitMQ prelaunch setup"
 
 APP_MODULE = "rabbit_prelaunch_app"
-
-RUNTIME_DEPS = [
-    "@cuttlefish//:erlang_app",
-    "@thoas//:erlang_app",
-]
-
-DEPS = [
-    "//deps/rabbit_common:erlang_app",
-]
 
 all_beam_files(name = "all_beam_files")
 
@@ -67,15 +59,16 @@ xref(
 )
 
 plt(
-    name = "base_plt",
-    deps = DEPS,
+    name = "deps_plt",
+    for_target = ":erlang_app",
+    plt = "//:base_plt",
 )
 
 dialyze(
     name = "dialyze",
+    dialyzer_opts = RABBITMQ_DIALYZER_OPTS,
     plt = ":deps_plt",
     target = ":erlang_app",
-    warnings_as_errors = False,
 )
 
 rabbitmq_suite(
@@ -119,10 +112,4 @@ eunit(
         "rabbit_prelaunch_sup",
     ],
     deps = [":test_erlang_app"],
-)
-
-plt(
-    name = "deps_plt",
-    for_target = ":erlang_app",
-    plt = "//:base_plt",
 )
