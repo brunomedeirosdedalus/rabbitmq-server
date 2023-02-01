@@ -1,6 +1,53 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
 
+git_repository(
+    name = "rules_erlang",
+    remote = "https://github.com/rabbitmq/rules_erlang.git",
+    tag = "3.9.1",
+)
+
+load("@rules_erlang//:internal_deps.bzl", "rules_erlang_internal_deps")
+
+rules_erlang_internal_deps()
+
+load("@rules_erlang//:internal_setup.bzl", "rules_erlang_internal_setup")
+
+rules_erlang_internal_setup(go_repository_default_config = "//:WORKSPACE")
+
+load("@rules_erlang//gazelle:deps.bzl", "gazelle_deps")
+
+gazelle_deps()
+
+http_archive(
+    name = "io_bazel_rules_docker",
+    sha256 = "b1e80761a8a8243d03ebca8845e9cc1ba6c82ce7c5179ce2b295cd36f7e394bf",
+    urls = ["https://github.com/bazelbuild/rules_docker/releases/download/v0.25.0/rules_docker-v0.25.0.tar.gz"],
+)
+
+load(
+    "@io_bazel_rules_docker//repositories:repositories.bzl",
+    container_repositories = "repositories",
+)
+
+container_repositories()
+
+load("@io_bazel_rules_docker//repositories:deps.bzl", container_deps = "deps")
+
+container_deps()
+
+load(
+    "@io_bazel_rules_docker//container:container.bzl",
+    "container_pull",
+)
+
+container_pull(
+    name = "ubuntu2004",
+    registry = "index.docker.io",
+    repository = "pivotalrabbitmq/ubuntu",
+    tag = "20.04",
+)
+
 http_file(
     name = "openssl-1.1.1g",
     downloaded_file_path = "openssl-1.1.1g.tar.gz",
@@ -42,43 +89,6 @@ http_archive(
     strip_prefix = "buildbuddy-toolchain-829c8a574f706de5c96c54ca310f139f4acda7dd",
     urls = ["https://github.com/buildbuddy-io/buildbuddy-toolchain/archive/829c8a574f706de5c96c54ca310f139f4acda7dd.tar.gz"],
 )
-
-load("@io_buildbuddy_buildbuddy_toolchain//:deps.bzl", "buildbuddy_deps")
-
-buildbuddy_deps()
-
-load("@io_buildbuddy_buildbuddy_toolchain//:rules.bzl", "buildbuddy")
-
-buildbuddy(
-    name = "buildbuddy_toolchain",
-    llvm = True,
-)
-
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
-git_repository(
-    name = "rbe",
-    branch = "linux-rbe",
-    remote = "https://github.com/rabbitmq/rbe-erlang-platform.git",
-)
-
-git_repository(
-    name = "rules_erlang",
-    branch = "main",
-    remote = "https://github.com/rabbitmq/rules_erlang.git",
-)
-
-load("@rules_erlang//:internal_deps.bzl", "rules_erlang_internal_deps")
-
-rules_erlang_internal_deps()
-
-load("@rules_erlang//:internal_setup.bzl", "rules_erlang_internal_setup")
-
-rules_erlang_internal_setup(go_repository_default_config = "//:WORKSPACE")
-
-load("@rules_erlang//gazelle:deps.bzl", "gazelle_deps")
-
-gazelle_deps()
 
 load(
     "@rules_erlang//:rules_erlang.bzl",
@@ -166,32 +176,19 @@ load("//bazel/bzlmod:secondary_umbrella.bzl", "secondary_umbrella")
 
 secondary_umbrella()
 
-# rules_docker will setup go at the wrong version if called first
-http_archive(
-    name = "io_bazel_rules_docker",
-    sha256 = "b1e80761a8a8243d03ebca8845e9cc1ba6c82ce7c5179ce2b295cd36f7e394bf",
-    urls = ["https://github.com/bazelbuild/rules_docker/releases/download/v0.25.0/rules_docker-v0.25.0.tar.gz"],
+load("@io_buildbuddy_buildbuddy_toolchain//:deps.bzl", "buildbuddy_deps")
+
+buildbuddy_deps()
+
+load("@io_buildbuddy_buildbuddy_toolchain//:rules.bzl", "buildbuddy")
+
+buildbuddy(
+    name = "buildbuddy_toolchain",
+    llvm = True,
 )
 
-load(
-    "@io_bazel_rules_docker//repositories:repositories.bzl",
-    container_repositories = "repositories",
-)
-
-container_repositories()
-
-load("@io_bazel_rules_docker//repositories:deps.bzl", container_deps = "deps")
-
-container_deps()
-
-load(
-    "@io_bazel_rules_docker//container:container.bzl",
-    "container_pull",
-)
-
-container_pull(
-    name = "ubuntu2004",
-    registry = "index.docker.io",
-    repository = "pivotalrabbitmq/ubuntu",
-    tag = "20.04",
+git_repository(
+    name = "rbe",
+    branch = "linux-rbe",
+    remote = "https://github.com/rabbitmq/rbe-erlang-platform.git",
 )

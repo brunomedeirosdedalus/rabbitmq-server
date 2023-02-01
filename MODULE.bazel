@@ -34,14 +34,6 @@ bazel_dep(
     version = "3.9.1",
 )
 
-archive_override(
-    module_name = "rules_erlang",
-    urls = [
-        "https://github.com/rabbitmq/rules_erlang/archive/refs/heads/main.zip"
-    ],
-    strip_prefix = "rules_erlang-main",
-)
-
 erlang_config = use_extension(
     "@rules_erlang//bzlmod:extensions.bzl",
     "erlang_config",
