@@ -163,6 +163,7 @@ def rabbitmq_suite(
         additional_beam = [],
         test_env = {},
         deps = [],
+        runtime_deps = [],
         **kwargs):
     # suite_name exists in the underying ct_test macro, but we don't
     # want to use the arg in rabbitmq-server, for the sake of clarity
@@ -176,7 +177,7 @@ def rabbitmq_suite(
             "RABBITMQ_CT_SKIP_AS_ERROR": "true",
             "LANG": "C.UTF-8",
         }.items() + test_env.items()),
-        deps = [":test_erlang_app"] + deps,
+        deps = [":test_erlang_app"] + deps + runtime_deps,
         **kwargs
     )
     return name

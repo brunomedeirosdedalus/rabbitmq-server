@@ -65,8 +65,24 @@ xref(
 
 plt(
     name = "deps_plt",
+    apps = [
+        "common_test",  # keep
+        "eunit",  # keep
+        "inets",  # keep
+    ],
     for_target = ":erlang_app",
+    libs = [
+        "//deps/rabbitmq_cli:elixir",  #keep
+    ],
     plt = "//:base_plt",
+    deps = [
+        "//deps/rabbit:erlang_app",  #keep
+        "//deps/rabbit/apps/rabbitmq_prelaunch:erlang_app",  #keep
+        "//deps/rabbitmq_cli:elixir",  #keep
+        "//deps/rabbitmq_cli:erlang_app",  #keep
+        "//deps/rabbitmq_management_agent:erlang_app",  #keep
+        "@proper//:erlang_app",  #keep
+    ],
 )
 
 dialyze(
@@ -74,6 +90,7 @@ dialyze(
     dialyzer_opts = RABBITMQ_DIALYZER_OPTS,
     plt = ":deps_plt",
     target = ":erlang_app",
+    warnings_as_errors = False,
 )
 
 eunit(

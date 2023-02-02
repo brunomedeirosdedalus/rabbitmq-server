@@ -96,7 +96,9 @@ xref(
 plt(
     name = "deps_plt",
     for_target = ":erlang_app",
+    libs = ["//deps/rabbitmq_cli:elixir"],  #keep
     plt = "//:base_plt",
+    deps = ["//deps/rabbitmq_cli:erlang_app"],  #keep
 )
 
 dialyze(
@@ -144,22 +146,30 @@ eunit(
     deps = [":test_erlang_app"],
 )
 
-broker_for_integration_suites()
+broker_for_integration_suites(
+    extra_plugins = [
+        "//deps/rabbitmq_management:erlang_app",
+        "//deps/rabbitmq_web_mqtt:erlang_app",
+    ],
+)
 
 rabbitmq_integration_suite(
     name = "auth_SUITE",
     additional_beam = [
         "test/rabbit_auth_backend_mqtt_mock.beam",
     ],
-    flaky = True,
     runtime_deps = [
         "@emqtt//:erlang_app",
+        "@meck//:erlang_app",
     ],
 )
 
 rabbitmq_integration_suite(
     name = "cluster_SUITE",
     size = "large",
+    additional_beam = [
+        ":test_util_beam",
+    ],
     flaky = True,
     runtime_deps = [
         "@emqtt//:erlang_app",
@@ -168,6 +178,9 @@ rabbitmq_integration_suite(
 
 rabbitmq_integration_suite(
     name = "command_SUITE",
+    additional_beam = [
+        ":test_util_beam",
+    ],
     runtime_deps = [
         "@emqtt//:erlang_app",
     ],
@@ -183,6 +196,12 @@ rabbitmq_integration_suite(
 
 rabbitmq_integration_suite(
     name = "ff_SUITE",
+    additional_beam = [
+        ":test_util_beam",
+    ],
+    runtime_deps = [
+        "@emqtt//:erlang_app",
+    ],
 )
 
 rabbitmq_integration_suite(
@@ -210,6 +229,10 @@ rabbitmq_integration_suite(
 
 rabbitmq_integration_suite(
     name = "reader_SUITE",
+    additional_beam = [
+        ":test_util_beam",
+        ":test_event_recorder_beam",
+    ],
     runtime_deps = [
         "@emqtt//:erlang_app",
     ],
@@ -217,13 +240,28 @@ rabbitmq_integration_suite(
 
 rabbitmq_integration_suite(
     name = "retainer_SUITE",
+    additional_beam = [
+        ":test_util_beam",
+    ],
     runtime_deps = [
         "@emqtt//:erlang_app",
     ],
 )
 
-rabbitmq_suite(
+rabbitmq_integration_suite(
     name = "shared_SUITE",
+    size = "large",
+    additional_beam = [
+        ":test_util_beam",
+        ":test_event_recorder_beam",
+    ],
+    shard_count = 6,
+    runtime_deps = [
+        "//deps/rabbitmq_management_agent:erlang_app",
+        "@emqtt//:erlang_app",
+        "@gun//:erlang_app",
+        "@meck//:erlang_app",
+    ],
 )
 
 rabbitmq_suite(
