@@ -12,7 +12,7 @@ def all_beam_files(name = "all_beam_files"):
         outs = ["ebin/rabbit_exchange_type_random.beam"],
         app_name = "rabbitmq_random_exchange",
         erlc_opts = "//:erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app"],
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
 
 def all_srcs(name = "all_srcs"):
@@ -59,7 +59,7 @@ def all_test_beam_files(name = "all_test_beam_files"):
         outs = ["test/rabbit_exchange_type_random.beam"],
         app_name = "rabbitmq_random_exchange",
         erlc_opts = "//:test_erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app"],
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
 
 def test_suite_beam_files(name = "test_suite_beam_files"):

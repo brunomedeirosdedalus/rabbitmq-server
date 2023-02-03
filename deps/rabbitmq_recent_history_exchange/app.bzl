@@ -4,12 +4,21 @@ load("@rules_erlang//:filegroup.bzl", "filegroup")
 def all_beam_files(name = "all_beam_files"):
     filegroup(
         name = "beam_files",
-        srcs = ["ebin/rabbit_exchange_type_recent_history.beam"],
+        srcs = ["ebin/rabbit_db_rh_exchange.beam", "ebin/rabbit_exchange_type_recent_history.beam"],
     )
     erlang_bytecode(
         name = "ebin_rabbit_exchange_type_recent_history_beam",
         srcs = ["src/rabbit_exchange_type_recent_history.erl"],
         outs = ["ebin/rabbit_exchange_type_recent_history.beam"],
+        hdrs = ["include/rabbit_recent_history.hrl"],
+        app_name = "rabbitmq_recent_history_exchange",
+        erlc_opts = "//:erlc_opts",
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
+    )
+    erlang_bytecode(
+        name = "ebin_rabbit_db_rh_exchange_beam",
+        srcs = ["src/rabbit_db_rh_exchange.erl"],
+        outs = ["ebin/rabbit_db_rh_exchange.beam"],
         hdrs = ["include/rabbit_recent_history.hrl"],
         app_name = "rabbitmq_recent_history_exchange",
         erlc_opts = "//:erlc_opts",
@@ -20,13 +29,23 @@ def all_test_beam_files(name = "all_test_beam_files"):
     filegroup(
         name = "test_beam_files",
         testonly = True,
-        srcs = ["test/rabbit_exchange_type_recent_history.beam"],
+        srcs = ["test/rabbit_db_rh_exchange.beam", "test/rabbit_exchange_type_recent_history.beam"],
     )
     erlang_bytecode(
         name = "test_rabbit_exchange_type_recent_history_beam",
         testonly = True,
         srcs = ["src/rabbit_exchange_type_recent_history.erl"],
         outs = ["test/rabbit_exchange_type_recent_history.beam"],
+        hdrs = ["include/rabbit_recent_history.hrl"],
+        app_name = "rabbitmq_recent_history_exchange",
+        erlc_opts = "//:test_erlc_opts",
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
+    )
+    erlang_bytecode(
+        name = "test_rabbit_db_rh_exchange_beam",
+        testonly = True,
+        srcs = ["src/rabbit_db_rh_exchange.erl"],
+        outs = ["test/rabbit_db_rh_exchange.beam"],
         hdrs = ["include/rabbit_recent_history.hrl"],
         app_name = "rabbitmq_recent_history_exchange",
         erlc_opts = "//:test_erlc_opts",
@@ -53,7 +72,7 @@ def all_srcs(name = "all_srcs"):
 
     filegroup(
         name = "srcs",
-        srcs = ["src/rabbit_exchange_type_recent_history.erl"],
+        srcs = ["src/rabbit_db_rh_exchange.erl", "src/rabbit_exchange_type_recent_history.erl"],
     )
     filegroup(
         name = "public_hdrs",

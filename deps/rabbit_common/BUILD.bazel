@@ -122,6 +122,7 @@ rabbitmq_app(
     ],
     deps = [
         "@credentials_obfuscation//:erlang_app",
+        "@ranch//:erlang_app",
         "@recon//:erlang_app",
         "@thoas//:erlang_app",
     ],
@@ -233,7 +234,6 @@ eunit(
         "rabbit_env",
         "rabbit_error_logger_handler",
         "rabbit_event",
-        "rabbit_exchange_type",
         "rabbit_framing_amqp_0_8",
         "rabbit_framing_amqp_0_9_1",
         "rabbit_heartbeat",

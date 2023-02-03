@@ -167,7 +167,7 @@ def all_beam_files(name = "all_beam_files"):
         hdrs = ["include/rabbit_federation.hrl"],
         app_name = "rabbitmq_federation",
         erlc_opts = "//:erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app"],
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
     erlang_bytecode(
         name = "ebin_rabbit_federation_util_beam",
@@ -374,7 +374,7 @@ def all_test_beam_files(name = "all_test_beam_files"):
         hdrs = ["include/rabbit_federation.hrl"],
         app_name = "rabbitmq_federation",
         erlc_opts = "//:test_erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app"],
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
     erlang_bytecode(
         name = "test_rabbit_federation_util_beam",

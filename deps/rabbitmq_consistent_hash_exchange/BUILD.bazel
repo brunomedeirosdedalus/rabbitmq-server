@@ -76,6 +76,7 @@ eunit(
     eunit_mods = [
         "Elixir.RabbitMQ.CLI.Diagnostics.Commands.ConsistentHashExchangeRingStateCommand",
         "rabbit_exchange_type_consistent_hash",
+        "rabbit_db_ch_exchange",
     ],
     deps = [":test_erlang_app"],
 )

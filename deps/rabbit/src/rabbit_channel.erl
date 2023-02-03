@@ -2154,7 +2154,7 @@ deliver_to_queues({Delivery = #delivery{message    = Message = #basic_message{ex
                                         confirm    = Confirm,
                                         msg_seq_no = MsgSeqNo},
                    RoutedToQueueNames = [QName]}, State0 = #ch{queue_states = QueueStates0}) -> %% optimisation when there is one queue
-    Qs0 = rabbit_amqqueue:lookup(RoutedToQueueNames),
+    Qs0 = rabbit_amqqueue:lookup_many(RoutedToQueueNames),
     Qs = rabbit_amqqueue:prepend_extra_bcc(Qs0),
     QueueNames = lists:map(fun amqqueue:get_name/1, Qs),
     case rabbit_queue_type:deliver(Qs, Delivery, QueueStates0) of
@@ -2191,7 +2191,7 @@ deliver_to_queues({Delivery = #delivery{message    = Message = #basic_message{ex
                                         confirm    = Confirm,
                                         msg_seq_no = MsgSeqNo},
                    RoutedToQueueNames}, State0 = #ch{queue_states = QueueStates0}) ->
-    Qs0 = rabbit_amqqueue:lookup(RoutedToQueueNames),
+    Qs0 = rabbit_amqqueue:lookup_many(RoutedToQueueNames),
     Qs = rabbit_amqqueue:prepend_extra_bcc(Qs0),
     QueueNames = lists:map(fun amqqueue:get_name/1, Qs),
     case rabbit_queue_type:deliver(Qs, Delivery, QueueStates0) of
@@ -2831,16 +2831,7 @@ evaluate_consumer_timeout(State0 = #ch{cfg = #conf{channel = Channel,
 handle_queue_actions(Actions, #ch{} = State0) ->
     WriterPid = State0#ch.cfg#conf.writer_pid,
     lists:foldl(
-      fun ({send_credit_reply, Avail}, S0) ->
-              ok = rabbit_writer:send_command(WriterPid,
-                                              #'basic.credit_ok'{available = Avail}),
-              S0;
-          ({send_drained, {CTag, Credit}}, S0) ->
-              ok = rabbit_writer:send_command(
-                     WriterPid,
-                     #'basic.credit_drained'{consumer_tag   = CTag,
-                                             credit_drained = Credit}),
-              S0;
+      fun 
           ({settled, QRef, MsgSeqNos}, S0) ->
               confirm(MsgSeqNos, QRef, S0);
           ({rejected, _QRef, MsgSeqNos}, S0) ->
@@ -2865,8 +2856,27 @@ handle_queue_actions(Actions, #ch{} = State0) ->
               S0;
           ({unblock, QName}, S0) ->
               credit_flow:unblock(QName),
+              S0;
+          ({send_credit_reply, Avail}, S0) ->
+              ok = rabbit_writer:send_command(WriterPid,
+                                              #'basic.credit_ok'{available = Avail}),
+              S0;
+          ({send_drained, {CTag, Credit}}, S0) ->
+              ok = send_drained_to_writer(WriterPid, CTag, Credit),
+              S0;
+          ({send_drained, CTagCredits}, S0) when is_list(CTagCredits) ->
+              %% this is the backwards compatible option that classic queues
+              %% used to send, this can be removed in 4.0
+              [ok = send_drained_to_writer(WriterPid, CTag, Credit)
+               || {CTag, Credit} <- CTagCredits],
               S0
       end, State0, Actions).
+
+send_drained_to_writer(WriterPid, CTag, Credit) ->
+    ok = rabbit_writer:send_command(
+           WriterPid,
+           #'basic.credit_drained'{consumer_tag = CTag,
+                                   credit_drained = Credit}).
 
 maybe_increase_global_publishers(#ch{publishing_mode = true} = State0) ->
     State0;

@@ -68,7 +68,10 @@ dialyze(
 eunit(
     name = "eunit",
     compiled_suites = [],
-    eunit_mods = ["rabbit_exchange_type_recent_history"],
+    eunit_mods = [
+        "rabbit_exchange_type_recent_history",
+        "rabbit_db_rh_exchange",
+    ],
     deps = [":test_erlang_app"],
 )
 

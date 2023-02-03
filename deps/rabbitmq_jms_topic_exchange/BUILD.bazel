@@ -35,10 +35,6 @@ test_suite_beam_files(name = "test_suite_beam_files")
 # gazelle:erlang_app_dep rabbit_common
 # gazelle:erlang_app_dep rabbit
 
-EXTRA_APPS = [
-    "mnesia",
-]
-
 rabbitmq_app(
     name = "erlang_app",
     srcs = [":all_srcs"],
@@ -77,6 +73,7 @@ eunit(
     eunit_mods = [
         "rabbit_jms_topic_exchange",
         "sjx_evaluator",
+        "rabbit_db_jms_exchange",
     ],
     deps = [":test_erlang_app"],
 )

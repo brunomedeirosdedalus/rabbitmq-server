@@ -4,7 +4,7 @@ load("@rules_erlang//:filegroup.bzl", "filegroup")
 def all_beam_files(name = "all_beam_files"):
     filegroup(
         name = "beam_files",
-        srcs = ["ebin/Elixir.RabbitMQ.CLI.Diagnostics.Commands.ConsistentHashExchangeRingStateCommand.beam", "ebin/rabbit_exchange_type_consistent_hash.beam"],
+        srcs = ["ebin/Elixir.RabbitMQ.CLI.Diagnostics.Commands.ConsistentHashExchangeRingStateCommand.beam", "ebin/rabbit_db_ch_exchange.beam", "ebin/rabbit_exchange_type_consistent_hash.beam"],
     )
     erlang_bytecode(
         name = "ebin_Elixir_RabbitMQ_CLI_Diagnostics_Commands_ConsistentHashExchangeRingStateCommand_beam",
@@ -19,6 +19,15 @@ def all_beam_files(name = "all_beam_files"):
         name = "ebin_rabbit_exchange_type_consistent_hash_beam",
         srcs = ["src/rabbit_exchange_type_consistent_hash.erl"],
         outs = ["ebin/rabbit_exchange_type_consistent_hash.beam"],
+        hdrs = ["include/rabbitmq_consistent_hash_exchange.hrl"],
+        app_name = "rabbitmq_consistent_hash_exchange",
+        erlc_opts = "//:erlc_opts",
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
+    )
+    erlang_bytecode(
+        name = "ebin_rabbit_db_ch_exchange_beam",
+        srcs = ["src/rabbit_db_ch_exchange.erl"],
+        outs = ["ebin/rabbit_db_ch_exchange.beam"],
         hdrs = ["include/rabbitmq_consistent_hash_exchange.hrl"],
         app_name = "rabbitmq_consistent_hash_exchange",
         erlc_opts = "//:erlc_opts",
@@ -39,13 +48,23 @@ def all_test_beam_files(name = "all_test_beam_files"):
     filegroup(
         name = "test_beam_files",
         testonly = True,
-        srcs = ["test/Elixir.RabbitMQ.CLI.Diagnostics.Commands.ConsistentHashExchangeRingStateCommand.beam", "test/rabbit_exchange_type_consistent_hash.beam"],
+        srcs = ["test/Elixir.RabbitMQ.CLI.Diagnostics.Commands.ConsistentHashExchangeRingStateCommand.beam", "test/rabbit_db_ch_exchange.beam", "test/rabbit_exchange_type_consistent_hash.beam"],
     )
     erlang_bytecode(
         name = "test_rabbit_exchange_type_consistent_hash_beam",
         testonly = True,
         srcs = ["src/rabbit_exchange_type_consistent_hash.erl"],
         outs = ["test/rabbit_exchange_type_consistent_hash.beam"],
+        hdrs = ["include/rabbitmq_consistent_hash_exchange.hrl"],
+        app_name = "rabbitmq_consistent_hash_exchange",
+        erlc_opts = "//:test_erlc_opts",
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
+    )
+    erlang_bytecode(
+        name = "test_rabbit_db_ch_exchange_beam",
+        testonly = True,
+        srcs = ["src/rabbit_db_ch_exchange.erl"],
+        outs = ["test/rabbit_db_ch_exchange.beam"],
         hdrs = ["include/rabbitmq_consistent_hash_exchange.hrl"],
         app_name = "rabbitmq_consistent_hash_exchange",
         erlc_opts = "//:test_erlc_opts",
@@ -72,7 +91,7 @@ def all_srcs(name = "all_srcs"):
 
     filegroup(
         name = "srcs",
-        srcs = ["src/Elixir.RabbitMQ.CLI.Diagnostics.Commands.ConsistentHashExchangeRingStateCommand.erl", "src/rabbit_exchange_type_consistent_hash.erl"],
+        srcs = ["src/Elixir.RabbitMQ.CLI.Diagnostics.Commands.ConsistentHashExchangeRingStateCommand.erl", "src/rabbit_db_ch_exchange.erl", "src/rabbit_exchange_type_consistent_hash.erl"],
     )
     filegroup(
         name = "public_hdrs",

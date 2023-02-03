@@ -512,14 +512,11 @@ rabbitmq_integration_suite(
     ],
 )
 
-rabbitmq_suite(
+rabbitmq_integration_suite(
     name = "mirrored_supervisor_SUITE",
     size = "small",
     additional_beam = [
         "test/mirrored_supervisor_SUITE_gs.beam",
-    ],
-    deps = [
-        "//deps/rabbit_common:erlang_app",
     ],
 )
 
@@ -836,11 +833,6 @@ rabbitmq_integration_suite(
 )
 
 rabbitmq_integration_suite(
-    name = "unicode_SUITE",
-    size = "medium",
-)
-
-rabbitmq_integration_suite(
     name = "unit_access_control_authn_authz_context_propagation_SUITE",
     size = "medium",
     additional_beam = [
@@ -1051,6 +1043,59 @@ rabbitmq_integration_suite(
     deps = [
         "@proper//:erlang_app",
     ],
+)
+
+rabbitmq_integration_suite(
+    name = "unicode_SUITE",
+    size = "small",
+)
+
+rabbitmq_integration_suite(
+    name = "exchanges_SUITE",
+    size = "small",
+    additional_beam = [
+        ":test_quorum_queue_utils_beam",
+    ],
+)
+
+rabbitmq_integration_suite(
+    name = "bindings_SUITE",
+    size = "small",
+)
+
+rabbitmq_integration_suite(
+    name = "rabbit_db_queue_SUITE",
+    size = "small",
+)
+
+rabbitmq_integration_suite(
+    name = "rabbit_db_maintenance_SUITE",
+    size = "small",
+)
+
+rabbitmq_integration_suite(
+    name = "rabbit_db_topic_exchange_SUITE",
+    size = "small",
+)
+
+rabbitmq_integration_suite(
+    name = "rabbit_db_exchange_SUITE",
+    size = "small",
+)
+
+rabbitmq_integration_suite(
+    name = "rabbit_db_binding_SUITE",
+    size = "small",
+)
+
+rabbitmq_integration_suite(
+    name = "rabbit_db_msup_SUITE",
+    size = "small",
+)
+
+rabbitmq_integration_suite(
+    name = "rabbit_db_policy_SUITE",
+    size = "small",
 )
 
 assert_suites()
@@ -1361,6 +1406,14 @@ eunit(
         "rabbit_db_rtparams",
         "rabbit_db_user",
         "rabbit_db_vhost",
+        "rabbit_db_binding",
+        "rabbit_db_exchange",
+        "rabbit_db_maintenance",
+        "rabbit_db_msup",
+        "rabbit_db_policy",
+        "rabbit_db_queue",
+        "rabbit_db_topic_exchange",
+        "rabbit_exchange_type",
     ],
     deps = [":test_erlang_app"],
 )

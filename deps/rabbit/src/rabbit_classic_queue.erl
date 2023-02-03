@@ -127,7 +127,7 @@ is_recoverable(Q) when ?is_amqqueue(Q) ->
     %% record if it is a mirrored queue (such info is now obtained from
     %% the policy). Thus, we must check if the local pid is alive
     %% - if the record is present - in order to restart.
-    (mnesia:read(rabbit_queue, amqqueue:get_name(Q), read) =:= []
+    (not rabbit_db_queue:consistent_exists(amqqueue:get_name(Q))
      orelse not rabbit_mnesia:is_process_alive(amqqueue:get_pid(Q))).
 
 recover(VHost, Queues) ->
@@ -551,9 +551,14 @@ deliver_to_consumer(Pid, QName, CTag, AckRequired, Message) ->
     Evt = {queue_event, QName, Deliver},
     gen_server:cast(Pid, Evt).
 
-send_drained(Pid, QName, CTagCredits) ->
+send_drained(Pid, QName, CTagCredits) when is_list(CTagCredits) ->
+    [_ = gen_server:cast(Pid, {queue_event, QName,
+                               {send_drained, CTagCredit}})
+     || CTagCredit <- CTagCredits],
+    ok;
+send_drained(Pid, QName, CTagCredit) when is_tuple(CTagCredit) ->
     gen_server:cast(Pid, {queue_event, QName,
-                          {send_drained, CTagCredits}}).
+                          {send_drained, CTagCredit}}).
 
 send_credit_reply(Pid, QName, Len) when is_integer(Len) ->
     gen_server:cast(Pid, {queue_event, QName,

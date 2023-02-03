@@ -49,6 +49,7 @@ rabbitmq_app(
         "//deps/rabbit_common:erlang_app",
         "//deps/rabbitmq_management:erlang_app",
         "//deps/rabbitmq_shovel:erlang_app",
+        "@cowboy//:erlang_app",
     ],
 )
 

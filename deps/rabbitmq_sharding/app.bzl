@@ -20,7 +20,7 @@ def all_beam_files(name = "all_beam_files"):
         outs = ["ebin/rabbit_sharding_exchange_type_modulus_hash.beam"],
         app_name = "rabbitmq_sharding",
         erlc_opts = "//:erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app"],
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
     erlang_bytecode(
         name = "ebin_rabbit_sharding_interceptor_beam",
@@ -77,7 +77,7 @@ def all_test_beam_files(name = "all_test_beam_files"):
         outs = ["test/rabbit_sharding_exchange_type_modulus_hash.beam"],
         app_name = "rabbitmq_sharding",
         erlc_opts = "//:test_erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app"],
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
     erlang_bytecode(
         name = "test_rabbit_sharding_interceptor_beam",

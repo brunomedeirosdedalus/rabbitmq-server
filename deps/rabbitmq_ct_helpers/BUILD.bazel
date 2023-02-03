@@ -41,6 +41,10 @@ rabbitmq_app(
         "tools/tls-certs/Makefile",
         "tools/tls-certs/openssl.cnf.in",
     ],
+    deps = [
+        "//deps/rabbitmq_management_agent:erlang_app",
+        "@proper//:erlang_app",
+    ],
 )
 
 alias(

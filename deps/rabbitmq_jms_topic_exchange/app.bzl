@@ -4,7 +4,7 @@ load("@rules_erlang//:filegroup.bzl", "filegroup")
 def all_beam_files(name = "all_beam_files"):
     filegroup(
         name = "beam_files",
-        srcs = ["ebin/rabbit_jms_topic_exchange.beam", "ebin/sjx_evaluator.beam"],
+        srcs = ["ebin/rabbit_db_jms_exchange.beam", "ebin/rabbit_jms_topic_exchange.beam", "ebin/sjx_evaluator.beam"],
     )
     erlang_bytecode(
         name = "ebin_rabbit_jms_topic_exchange_beam",
@@ -13,7 +13,7 @@ def all_beam_files(name = "all_beam_files"):
         hdrs = ["include/rabbit_jms_topic_exchange.hrl"],
         app_name = "rabbitmq_jms_topic_exchange",
         erlc_opts = "//:erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app"],
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
     erlang_bytecode(
         name = "ebin_sjx_evaluator_beam",
@@ -22,12 +22,21 @@ def all_beam_files(name = "all_beam_files"):
         app_name = "rabbitmq_jms_topic_exchange",
         erlc_opts = "//:erlc_opts",
     )
+    erlang_bytecode(
+        name = "ebin_rabbit_db_jms_exchange_beam",
+        srcs = ["src/rabbit_db_jms_exchange.erl"],
+        outs = ["ebin/rabbit_db_jms_exchange.beam"],
+        hdrs = ["include/rabbit_jms_topic_exchange.hrl"],
+        app_name = "rabbitmq_jms_topic_exchange",
+        erlc_opts = "//:erlc_opts",
+        deps = ["//deps/rabbit_common:erlang_app"],
+    )
 
 def all_test_beam_files(name = "all_test_beam_files"):
     filegroup(
         name = "test_beam_files",
         testonly = True,
-        srcs = ["test/rabbit_jms_topic_exchange.beam", "test/sjx_evaluator.beam"],
+        srcs = ["test/rabbit_db_jms_exchange.beam", "test/rabbit_jms_topic_exchange.beam", "test/sjx_evaluator.beam"],
     )
     erlang_bytecode(
         name = "test_rabbit_jms_topic_exchange_beam",
@@ -37,7 +46,7 @@ def all_test_beam_files(name = "all_test_beam_files"):
         hdrs = ["include/rabbit_jms_topic_exchange.hrl"],
         app_name = "rabbitmq_jms_topic_exchange",
         erlc_opts = "//:test_erlc_opts",
-        deps = ["//deps/rabbit_common:erlang_app"],
+        deps = ["//deps/rabbit:erlang_app", "//deps/rabbit_common:erlang_app"],
     )
     erlang_bytecode(
         name = "test_sjx_evaluator_beam",
@@ -46,6 +55,16 @@ def all_test_beam_files(name = "all_test_beam_files"):
         outs = ["test/sjx_evaluator.beam"],
         app_name = "rabbitmq_jms_topic_exchange",
         erlc_opts = "//:test_erlc_opts",
+    )
+    erlang_bytecode(
+        name = "test_rabbit_db_jms_exchange_beam",
+        testonly = True,
+        srcs = ["src/rabbit_db_jms_exchange.erl"],
+        outs = ["test/rabbit_db_jms_exchange.beam"],
+        hdrs = ["include/rabbit_jms_topic_exchange.hrl"],
+        app_name = "rabbitmq_jms_topic_exchange",
+        erlc_opts = "//:test_erlc_opts",
+        deps = ["//deps/rabbit_common:erlang_app"],
     )
 
 def all_srcs(name = "all_srcs"):
@@ -68,7 +87,7 @@ def all_srcs(name = "all_srcs"):
 
     filegroup(
         name = "srcs",
-        srcs = ["src/rabbit_jms_topic_exchange.erl", "src/sjx_evaluator.erl"],
+        srcs = ["src/rabbit_db_jms_exchange.erl", "src/rabbit_jms_topic_exchange.erl", "src/sjx_evaluator.erl"],
     )
     filegroup(
         name = "public_hdrs",
