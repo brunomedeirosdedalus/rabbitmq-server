@@ -409,7 +409,7 @@ get_all_in_mnesia() ->
       end).
 
 get_all_in_khepri() ->
-    ets:tab2list(rabbit_khepri_bindings).
+    [B || #route{binding = B} <- ets:tab2list(rabbit_khepri_bindings)].
 
 -spec get_all(VHostName) -> [Binding] when
       VHostName :: vhost:name(),
