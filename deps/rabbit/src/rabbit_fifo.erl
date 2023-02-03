@@ -1942,12 +1942,27 @@ evaluate_limit(Index, Result, BeforeState,
             {State0, Result, Effects0}
     end.
 
-append_delivery_effects(Effects0, AccMap, _State) when map_size(AccMap) == 0 ->
+%% [6,5,4,3,2,1] -> [[1,2],[3,4],[5,6]]
+chunk_disk_msgs([], _Num, Chunks) ->
+    Chunks;
+chunk_disk_msgs([Msg | Rem], 100, [CurChunk | Chunks]) ->
+    %% TODO: also check byte size
+    % Size = get_header_size(
+    chunk_disk_msgs(Rem, 1, [[], [Msg | CurChunk] | Chunks]);
+chunk_disk_msgs([Msg | Rem], Num, [CurChunk | Chunks]) ->
+    chunk_disk_msgs(Rem, Num + 1, [[Msg | CurChunk] | Chunks]).
+
+append_delivery_effects(Effects0, AccMap, _State)
+  when map_size(AccMap) == 0 ->
     %% does this ever happen?
     Effects0;
 append_delivery_effects(Effects0, AccMap, State) ->
-     maps:fold(fun (C, DiskMsgs, Ef) when is_list(DiskMsgs) ->
-                       [delivery_effect(C, lists:reverse(DiskMsgs), State) | Ef]
+     maps:fold(fun (C, DiskMsgs, Efs)
+                     when is_list(DiskMsgs) ->
+                       lists:foldr(
+                         fun (Msgs, E) ->
+                                 [delivery_effect(C, Msgs, State) | E]
+                         end, Efs, chunk_disk_msgs(DiskMsgs, 1, [[]]))
                end, Effects0, AccMap).
 
 take_next_msg(#?MODULE{returns = Returns0,
