@@ -1944,7 +1944,13 @@ evaluate_limit(Index, Result, BeforeState,
 
 %% [6,5,4,3,2,1] -> [[1,2],[3,4],[5,6]]
 chunk_disk_msgs([], _Num, Chunks) ->
-    Chunks;
+    case Chunks of
+        [[] | Rem] ->
+            %% trim the empty chunk
+            Rem;
+        _ ->
+            Chunks
+    end;
 chunk_disk_msgs([Msg | Rem], 100, [CurChunk | Chunks]) ->
     %% TODO: also check byte size
     % Size = get_header_size(
